@@ -7,14 +7,13 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
         
-        /* 纯白遮罩：层级最高，默认显示 */
+        /* 纯白遮罩 */
         #intro-overlay { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             background-color: #ffffff; 
-            z-index: 2000; /* 确保盖住一切 */
+            z-index: 2000; 
             pointer-events: none; 
             opacity: 1;
-            transition: opacity 0.5s ease; /* 用于快速复原白屏 */
         }
 
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
@@ -47,21 +46,19 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import gsap from 'gsap';
         
-        // Firebase Imports
+        // 引入新的 Firestore 方法 (getDocs, query, where) 用于获取列表
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // ======================================================
-        // TODO: 记得保留你之前的 firebaseConfig 配置！不要覆盖空了
-        // ======================================================
+        // === 你的配置已填入 ===
         const firebaseConfig = {
-                apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
-  	authDomain: "online-white-box.firebaseapp.com",
-  	projectId: "online-white-box",
-  	storageBucket: "online-white-box.firebasestorage.app",
-  	messagingSenderId: "227799896378",
-  	appId: "1:227799896378:web:94e416ee99d0e720e18003",
-  	measurementId: "G-G2ZWQZ8W8F"
+            apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
+            authDomain: "online-white-box.firebaseapp.com",
+            projectId: "online-white-box",
+            storageBucket: "online-white-box.firebasestorage.app",
+            messagingSenderId: "227799896378",
+            appId: "1:227799896378:web:94e416ee99d0e720e18003",
+            measurementId: "G-G2ZWQZ8W8F"
         };
 
         let app, db;
@@ -124,46 +121,58 @@
             controls = new PointerLockControls(camera, document.body);
             setupControlsEvents(); setupKeyControls(); window.addEventListener('resize', onWindowResize);
 
-            // Start listening
-            if(db) listenToCloudUpdates();
+            // 开始加载每日模型逻辑
+            if(db) loadDailyModel();
             else loadDefaultSculpture();
         }
 
-        function listenToCloudUpdates() {
-            onSnapshot(doc(db, "settings", "gallery_display"), (doc) => {
-                // 当检测到更新时，先快速把屏幕变白，遮住替换过程
-                if (isModelLoaded) {
-                    introOverlayDiv.style.opacity = '1';
-                    introOverlayDiv.style.display = 'block';
-                    instructionText.style.opacity = '0';
-                    clickCaptureDiv.style.display = 'none';
-                    if(controls.isLocked) controls.unlock();
+        // === 核心：每日策展算法 ===
+        async function loadDailyModel() {
+            try {
+                // 1. 获取所有可用的模型 (active == true)
+                const q = query(collection(db, "model_library"), where("active", "==", true));
+                const querySnapshot = await getDocs(q);
+                
+                const models = [];
+                querySnapshot.forEach((doc) => {
+                    models.push(doc.data());
+                });
+
+                if (models.length === 0) {
+                    console.log("No models in library.");
+                    loadDefaultSculpture();
+                    return;
                 }
 
-                if (doc.exists()) {
-                    const data = doc.data();
-                    loadModelFromUrl(data.modelUrl);
-                } else {
-                    loadDefaultSculpture();
-                }
-            }, (error) => {
-                console.error("Cloud Error", error);
+                // 2. 按上传时间排序 (确保每日顺序固定)
+                models.sort((a, b) => a.uploadDate.seconds - b.uploadDate.seconds);
+
+                // 3. 算法：(今天距离1970年是第几天) % (模型总数) = 今天的索引
+                const today = new Date();
+                const dayIndex = Math.floor(today.getTime() / (1000 * 60 * 60 * 24));
+                const index = dayIndex % models.length;
+
+                console.log(`Library Size: ${models.length}, Day Index: ${dayIndex}, Selected: ${models[index].name}`);
+
+                // 4. 加载选中的模型
+                loadModelFromUrl(models[index].url);
+
+            } catch (error) {
+                console.error("Library Error:", error);
                 loadDefaultSculpture();
-            });
+            }
         }
 
         function loadModelFromUrl(url) {
             const loader = new GLTFLoader();
             loader.load(url, (gltf) => {
                 processAndPlaceModel(gltf.scene);
-                // 模型处理完后，执行淡入展示
                 revealScene();
             }, 
             undefined,
             (err) => {
                 console.error(err);
-                // 出错也要展示场景（可能显示的是旧的或者空的）
-                revealScene();
+                revealScene(); // 即使失败也移除遮罩以免卡死
             });
         }
 
@@ -207,12 +216,10 @@
         }
 
         function revealScene() {
-            // 使用 GSAP 优雅地淡出遮罩
-            // 延迟一点点，确保渲染已经跟上
             setTimeout(() => {
                 gsap.to(introOverlayDiv, { 
                     opacity: 0, 
-                    duration: 2.5, // 缓慢淡出，非常优雅
+                    duration: 2.5, 
                     ease: "power2.inOut", 
                     onComplete: () => { 
                         introOverlayDiv.style.display = 'none'; 
