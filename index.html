@@ -100,11 +100,10 @@
             controls = new PointerLockControls(camera, document.body);
             setupControlsEvents(); setupKeyControls(); window.addEventListener('resize', onWindowResize);
 
-            if(db) loadRandomModel(); // 之前是 loadDailyModel
+            if(db) loadRandomModel(); 
             else loadDefaultSculpture();
         }
 
-        // === 修改 1: 随机模型逻辑 ===
         async function loadRandomModel() {
             try {
                 const q = query(collection(db, "model_library"), where("active", "==", true));
@@ -114,9 +113,8 @@
 
                 if (models.length === 0) { loadDefaultSculpture(); return; }
                 
-                // 纯随机算法
+                // 纯随机
                 const index = Math.floor(Math.random() * models.length);
-
                 console.log(`Loading random model: ${models[index].name} (Index: ${index})`);
                 loadModelFromUrl(models[index].url, models[index].name);
 
@@ -140,7 +138,6 @@
             revealScene();
         }
 
-        // === 修改 2: 正方形小展签 ===
         function createMuseumLabel(modelName, sizeInfo) {
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; }
 
@@ -149,60 +146,26 @@
             const randMat = materials[Math.floor(Math.random() * materials.length)];
             const cleanName = modelName.replace(".glb", "").replace(/^\d+_/, "").replace(/_/g, " ");
 
-            // Canvas 改为正方形
+            // Canvas 正方形
             const canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 512; 
             const ctx = canvas.getContext('2d');
             
-            // 背景
-            ctx.fillStyle = '#f9f9f9'; 
-            ctx.fillRect(0, 0, 512, 512);
+            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 512, 512);
+            ctx.fillStyle = '#111'; ctx.textAlign = 'left';
             
-            // 样式调整以适应正方形
-            ctx.fillStyle = '#111';
-            ctx.textAlign = 'left';
-            
-            // 标题 (更小一点的字号)
-            ctx.font = 'bold 50px Helvetica, Arial';
-            ctx.fillText(cleanName, 40, 80);
-
-            // 年份
-            ctx.font = '36px Helvetica, Arial';
-            ctx.fillStyle = '#666';
-            ctx.fillText(mockYear, 40, 140);
-
-            // 材质
-            ctx.font = '30px Helvetica, Arial';
-            ctx.fillStyle = '#333';
-            ctx.fillText(randMat, 40, 260);
-
-            // 尺寸
-            ctx.font = '24px Helvetica, Arial';
-            ctx.fillStyle = '#555';
-            ctx.fillText(sizeInfo, 40, 310);
-            
-            // 版权/Credit
-            ctx.font = '20px Helvetica, Arial';
-            ctx.fillStyle = '#999';
-            ctx.fillText("Courtesy of the Digital Archive", 40, 460);
-
-            // 边框
-            ctx.strokeStyle = '#ddd';
-            ctx.lineWidth = 8;
-            ctx.strokeRect(0, 0, 512, 512);
+            ctx.font = 'bold 50px Helvetica, Arial'; ctx.fillText(cleanName, 40, 80);
+            ctx.font = '36px Helvetica, Arial'; ctx.fillStyle = '#666'; ctx.fillText(mockYear, 40, 140);
+            ctx.font = '30px Helvetica, Arial'; ctx.fillStyle = '#333'; ctx.fillText(randMat, 40, 260);
+            ctx.font = '24px Helvetica, Arial'; ctx.fillStyle = '#555'; ctx.fillText(sizeInfo, 40, 310);
+            ctx.font = '20px Helvetica, Arial'; ctx.fillStyle = '#999'; ctx.fillText("Courtesy of the Digital Archive", 40, 460);
+            ctx.strokeStyle = '#ddd'; ctx.lineWidth = 8; ctx.strokeRect(0, 0, 512, 512);
 
             const texture = new THREE.CanvasTexture(canvas);
-            
-            // 模型改为更小的正方形: 0.3m x 0.3m
-            const labelGeo = new THREE.BoxGeometry(0.3, 0.015, 0.3); 
-            const labelMat = new THREE.MeshStandardMaterial({ 
-                map: texture, 
-                color: 0xffffff,
-                roughness: 0.8 
-            });
+            const labelGeo = new THREE.BoxGeometry(0.3, 0.015, 0.3); // 30cm 小正方形
+            const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.8 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
-            mesh.castShadow = true; 
-            mesh.receiveShadow = true;
+            mesh.castShadow = true; mesh.receiveShadow = true;
             return mesh;
         }
 
@@ -220,24 +183,27 @@
                 }
             });
 
+            // 1. 获取模型原始尺寸
             const box = new THREE.Box3().setFromObject(rawModel);
             const size = box.getSize(new THREE.Vector3());
             
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const targetSize = 5.0; 
-            const scaleFactor = targetSize / maxDim;
-            rawModel.scale.setScalar(scaleFactor);
+            // === 修改点：移除自动缩放 ===
+            // 之前的代码在这里会计算 scaleFactor 并 setScalar。现在直接跳过。
+            // 保持 1:1 原始比例。
             rawModel.position.set(0,0,0);
             rawModel.updateMatrixWorld(true);
 
+            // 2. 重新计算 Box (因为没缩放，其实和上面一样，但为了逻辑统一保留)
             const newBox = new THREE.Box3().setFromObject(rawModel);
             const newCenter = newBox.getCenter(new THREE.Vector3());
             const finalSize = newBox.getSize(new THREE.Vector3());
 
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
+            
+            // 3. 居中 & 落地 (保持这个功能)
             rawModel.position.x = -newCenter.x;
             rawModel.position.z = -newCenter.z;
-            rawModel.position.y = -newBox.min.y; 
+            rawModel.position.y = -newBox.min.y; // 确保底部对齐 Y=0
             sculptureWrapper.add(rawModel);
 
             sculptureWrapper.position.copy(targetPosition);
@@ -253,7 +219,10 @@
             labelMesh.rotation.x = 0; 
             scene.add(labelMesh);
 
-            colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 1.5; 
+            // === 修改点：更真实的碰撞体积 ===
+            // 之前是 + 1.5，现在改为 + 0.4，允许贴得更近
+            colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.4; 
+            
             isModelLoaded = true;
         }
 
