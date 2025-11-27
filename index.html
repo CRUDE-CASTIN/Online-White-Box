@@ -1,21 +1,29 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>无暇纯白艺术馆 - Online Gallery</title>
+    <title>White Void Gallery</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: sans-serif; }
-        #intro-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 1000; pointer-events: none; }
-        #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
-        #loading-text {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: #ccc; font-size: 14px; letter-spacing: 2px; z-index: 1001; pointer-events: none;
-            text-align: center;
+        body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+        
+        /* 纯白遮罩：层级最高，默认显示 */
+        #intro-overlay { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background-color: #ffffff; 
+            z-index: 2000; /* 确保盖住一切 */
+            pointer-events: none; 
+            opacity: 1;
+            transition: opacity 0.5s ease; /* 用于快速复原白屏 */
         }
+
+        #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
+        
         #instruction {
              position: absolute; bottom: 30px; width: 100%; text-align: center;
-             color: #999; font-size: 12px; z-index: 999; pointer-events: none; opacity: 0; transition: opacity 0.5s;
+             color: #bbb; font-size: 11px; z-index: 999; pointer-events: none; 
+             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px;
+             text-transform: uppercase;
         }
     </style>
     <script type="importmap">
@@ -30,9 +38,8 @@
 </head>
 <body>
     <div id="intro-overlay"></div>
-    <div id="loading-text">正在连接云端展厅...</div>
     <div id="click-capture"></div>
-    <div id="instruction">点击屏幕开始漫游 | WASD 移动</div>
+    <div id="instruction">Click to Start | WASD to Move</div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -45,10 +52,10 @@
         import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // ======================================================
-        // TODO: 请将下方花括号内的内容替换为你的 firebaseConfig
+        // TODO: 记得保留你之前的 firebaseConfig 配置！不要覆盖空了
         // ======================================================
         const firebaseConfig = {
-               apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
+                apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
   	authDomain: "online-white-box.firebaseapp.com",
   	projectId: "online-white-box",
   	storageBucket: "online-white-box.firebasestorage.app",
@@ -57,8 +64,13 @@
   	measurementId: "G-G2ZWQZ8W8F"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        let app, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+        } catch(e) {
+            console.error("Firebase init failed:", e);
+        }
 
         let camera, scene, renderer, controls;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -70,11 +82,10 @@
         let colliderRadius = 2.0;
         const targetPosition = new THREE.Vector3(0, 0, -6);
 
-        let isIntroFinished = false;
+        let isModelLoaded = false;
         const clickCaptureDiv = document.getElementById('click-capture');
         const introOverlayDiv = document.getElementById('intro-overlay');
         const instructionText = document.getElementById('instruction');
-        const loadingText = document.getElementById('loading-text');
 
         init();
         animate();
@@ -85,7 +96,7 @@
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.7, 4); 
 
-            // 光照设置
+            // Lighting
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); hemiLight.position.set(0, 20, 0); scene.add(hemiLight);
             const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); keyLight.position.set(8, 12, 8); keyLight.castShadow = true;
             keyLight.shadow.mapSize.set(4096, 4096); keyLight.shadow.bias = -0.0001; keyLight.shadow.radius = 2;
@@ -113,26 +124,30 @@
             controls = new PointerLockControls(camera, document.body);
             setupControlsEvents(); setupKeyControls(); window.addEventListener('resize', onWindowResize);
 
-            // === 监听云端数据变化 ===
-            listenToCloudUpdates();
+            // Start listening
+            if(db) listenToCloudUpdates();
+            else loadDefaultSculpture();
         }
 
         function listenToCloudUpdates() {
-            // 监听 Firestore 中的 'settings/gallery_display' 文档
-            // 一旦后台更新，这里会自动收到通知
             onSnapshot(doc(db, "settings", "gallery_display"), (doc) => {
+                // 当检测到更新时，先快速把屏幕变白，遮住替换过程
+                if (isModelLoaded) {
+                    introOverlayDiv.style.opacity = '1';
+                    introOverlayDiv.style.display = 'block';
+                    instructionText.style.opacity = '0';
+                    clickCaptureDiv.style.display = 'none';
+                    if(controls.isLocked) controls.unlock();
+                }
+
                 if (doc.exists()) {
                     const data = doc.data();
-                    loadingText.innerText = "检测到新展品，正在加载: " + data.modelName;
-                    loadingText.style.display = 'block';
                     loadModelFromUrl(data.modelUrl);
                 } else {
-                    // 数据库是空的，加载默认
                     loadDefaultSculpture();
                 }
             }, (error) => {
-                console.error("云端获取失败:", error);
-                loadingText.innerText = "连接云端失败，加载本地默认...";
+                console.error("Cloud Error", error);
                 loadDefaultSculpture();
             });
         }
@@ -141,16 +156,14 @@
             const loader = new GLTFLoader();
             loader.load(url, (gltf) => {
                 processAndPlaceModel(gltf.scene);
-                if(!isIntroFinished) startIntroAnimation();
-                else loadingText.style.display = 'none'; // 如果是热更新，加载完隐藏提示
+                // 模型处理完后，执行淡入展示
+                revealScene();
             }, 
-            (xhr) => {
-                const percent = Math.round((xhr.loaded / xhr.total * 100));
-                if(isFinite(percent)) loadingText.innerText = `正在下载模型资源: ${percent}%`;
-            },
+            undefined,
             (err) => {
                 console.error(err);
-                alert("模型加载出错");
+                // 出错也要展示场景（可能显示的是旧的或者空的）
+                revealScene();
             });
         }
 
@@ -160,7 +173,7 @@
             const geo = new THREE.TorusKnotGeometry(0.8, 0.25, 128, 64);
             const mesh = new THREE.Mesh(geo, material); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
             processAndPlaceModel(group);
-            startIntroAnimation();
+            revealScene();
         }
 
         function processAndPlaceModel(rawModel) {
@@ -189,14 +202,28 @@
             sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = -Math.PI / 6;
             const finalSize = newBox.getSize(new THREE.Vector3());
             colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.8;
+            
+            isModelLoaded = true;
         }
 
-        function startIntroAnimation() {
-            gsap.to(introOverlayDiv, { opacity: 0, duration: 2.5, ease: "power2.inOut", onComplete: () => { 
-                introOverlayDiv.style.display = 'none'; isIntroFinished = true; clickCaptureDiv.style.display = 'block'; instructionText.style.opacity = '1'; loadingText.style.display = 'none';
-            }});
+        function revealScene() {
+            // 使用 GSAP 优雅地淡出遮罩
+            // 延迟一点点，确保渲染已经跟上
+            setTimeout(() => {
+                gsap.to(introOverlayDiv, { 
+                    opacity: 0, 
+                    duration: 2.5, // 缓慢淡出，非常优雅
+                    ease: "power2.inOut", 
+                    onComplete: () => { 
+                        introOverlayDiv.style.display = 'none'; 
+                        clickCaptureDiv.style.display = 'block'; 
+                        instructionText.style.opacity = '1'; 
+                    }
+                });
+            }, 100);
         }
-        function setupControlsEvents() { controls.addEventListener('lock', () => { clickCaptureDiv.style.display = 'none'; instructionText.style.opacity = '0'; }); controls.addEventListener('unlock', () => { if (isIntroFinished) { clickCaptureDiv.style.display = 'block'; instructionText.style.opacity = '1'; } }); clickCaptureDiv.addEventListener('click', () => controls.lock()); }
+
+        function setupControlsEvents() { controls.addEventListener('lock', () => { clickCaptureDiv.style.display = 'none'; instructionText.style.opacity = '0'; }); controls.addEventListener('unlock', () => { if (isModelLoaded) { clickCaptureDiv.style.display = 'block'; instructionText.style.opacity = '1'; } }); clickCaptureDiv.addEventListener('click', () => controls.lock()); }
         function setupKeyControls() { const onKeyDown = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = true; break; case 'ArrowLeft': case 'KeyA': moveLeft = true; break; case 'ArrowDown': case 'KeyS': moveBackward = true; break; case 'ArrowRight': case 'KeyD': moveRight = true; break; } }; const onKeyUp = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = false; break; case 'ArrowLeft': case 'KeyA': moveLeft = false; break; case 'ArrowDown': case 'KeyS': moveBackward = false; break; case 'ArrowRight': case 'KeyD': moveRight = false; break; } }; document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp); }
         function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
         function checkCollision() { if (!sculptureWrapper) return; const playerPos = new THREE.Vector2(camera.position.x, camera.position.z); const objectPos = new THREE.Vector2(sculptureWrapper.position.x, sculptureWrapper.position.z); const distance = playerPos.distanceTo(objectPos); if (distance < colliderRadius) { const pushDir = playerPos.sub(objectPos).normalize(); const newPos = objectPos.add(pushDir.multiplyScalar(colliderRadius)); camera.position.x = newPos.x; camera.position.z = newPos.y; } }
