@@ -4,8 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>White Void Gallery</title>
+    
+    <link rel="preconnect" href="https://esm.sh">
+    <link rel="preconnect" href="https://www.gstatic.com">
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com">
+
     <style>
-        body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; touch-action: none; /* 禁止移动端默认滚动 */ }
+        body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
         
         /* 开场遮罩 */
         #intro-overlay { 
@@ -13,40 +18,62 @@
             background-color: #ffffff; 
             z-index: 2000; 
             pointer-events: none; 
-            opacity: 1;
             display: flex; justify-content: center; align-items: center;
+            opacity: 1; transition: opacity 1s ease-out;
         }
 
-        /* ENTERING... 文字 */
+        /* 呼吸灯加载文字 */
         #loading-msg {
-            font-size: 10px;
-            color: #aaa;
-            letter-spacing: 3px;
-            font-weight: 500;
-            opacity: 0.8;
+            font-size: 10px; color: #aaa; letter-spacing: 3px; font-weight: 500;
             animation: pulse 2s infinite;
         }
-        @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+        @keyframes pulse { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
 
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
         
-        /* 隐藏移动端的操作提示，只在桌面显示 */
         #instruction { 
             position: absolute; bottom: 30px; width: 100%; text-align: center; 
             color: #bbb; font-size: 11px; z-index: 999; pointer-events: none; 
-            opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; 
-            text-transform: uppercase;
+            opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
+
+        /* === 虚拟摇杆样式 (仅在触摸屏显示) === */
+        #joystick-zone {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            width: 120px; height: 120px;
+            z-index: 1500; display: none; /* JS检测到触摸后开启 */
+        }
+        .joystick-base {
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            position: relative;
+            backdrop-filter: blur(2px);
+        }
+        .joystick-knob {
+            width: 50px; height: 50px;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
         @media (max-width: 768px) {
-            #instruction { display: none; } /* 手机端不显示文字提示，依靠直觉 */
+            #instruction { display: none; }
+            #joystick-zone { display: block; } /* 移动端显示摇杆 */
         }
     </style>
+    
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
+                "three": "https://esm.sh/three@0.160.0",
+                "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
+                "gsap": "https://esm.sh/gsap@3.12.5"
             }
         }
     </script>
@@ -55,13 +82,21 @@
     <div id="intro-overlay">
         <div id="loading-msg">ENTERING...</div>
     </div>
+    
     <div id="click-capture"></div>
     <div id="instruction">Click to Start | WASD to Move</div>
+
+    <div id="joystick-zone">
+        <div class="joystick-base">
+            <div class="joystick-knob" id="joystick-knob"></div>
+        </div>
+    </div>
 
     <script type="module">
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'; // 引入压缩解码器
         import gsap from 'gsap';
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -88,7 +123,7 @@
 
         let sculptureWrapper;
         let labelMesh; 
-        let colliderRadius = 2.0;
+        let colliderRadius = 0.1; // 极限贴近
         const targetPosition = new THREE.Vector3(0, 0, -6);
         let isModelLoaded = false;
         
@@ -97,9 +132,10 @@
         const instructionText = document.getElementById('instruction');
 
         // 移动端控制变量
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let isTouching = false;
+        let joystickVector = { x: 0, y: 0 }; // 摇杆向量 (-1 到 1)
+        let lookTouchId = null;
+        let lastLookX = 0;
+        let lastLookY = 0;
 
         init();
         animate();
@@ -110,46 +146,38 @@
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.7, 4); 
 
-            // 光照系统
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); 
-            hemiLight.position.set(0, 20, 0); 
-            scene.add(hemiLight);
-
-            const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); 
-            keyLight.position.set(0, 15, 0); // 顶光
-            keyLight.castShadow = true;
-            keyLight.shadow.mapSize.set(2048, 2048); // 稍微降低分辨率配合 blur
-            keyLight.shadow.bias = -0.0001; 
-            // === 修改 1: 柔化阴影边缘 ===
-            keyLight.shadow.radius = 10; // 这里的数值越大，边缘越虚化(PCSS效果)
+            // Lighting
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); hemiLight.position.set(0, 20, 0); scene.add(hemiLight);
             
+            const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); 
+            keyLight.position.set(0, 15, 0); 
+            keyLight.castShadow = true;
+            // 降低阴影贴图分辨率以提升加载和渲染性能
+            keyLight.shadow.mapSize.set(2048, 2048); 
+            keyLight.shadow.bias = -0.0001; 
+            keyLight.shadow.radius = 10; // 柔化
             const d = 15; 
             keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; 
             keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
             scene.add(keyLight);
 
-            const fillLight = new THREE.DirectionalLight(0xffeedd, 1.5); 
-            fillLight.position.set(-8, 5, 8); 
-            scene.add(fillLight);
-            
-            const topLight = new THREE.DirectionalLight(0xffffff, 0.8); 
-            topLight.position.set(0, 10, -6); 
-            scene.add(topLight);
+            const fillLight = new THREE.DirectionalLight(0xffeedd, 1.5); fillLight.position.set(-8, 5, 8); scene.add(fillLight);
+            const topLight = new THREE.DirectionalLight(0xffffff, 0.8); topLight.position.set(0, 10, -6); scene.add(topLight);
 
             const pmremGenerator = new THREE.PMREMGenerator( new THREE.WebGLRenderer() );
             pmremGenerator.compileEquirectangularShader();
             scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
 
             const planeGeometry = new THREE.PlaneGeometry(200, 200);
-            const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.12 }); // 阴影更淡一点配合虚化
+            const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.12 });
             const floor = new THREE.Mesh(planeGeometry, shadowMaterial);
             floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制最大DPI为2，提升移动端性能
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.outputColorSpace = THREE.SRGBColorSpace; 
-            renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 必须是 PCFSoft
+            renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.5;
             document.body.appendChild(renderer.domElement);
 
@@ -157,8 +185,8 @@
             
             setupControlsEvents(); 
             setupKeyControls(); 
-            setupMobileControls(); // === 修改 5: 添加移动端控制 ===
-            setupDoubleClickReset(); // === 修改 2: 添加双击复位 ===
+            setupTouchControls(); // 新的触摸逻辑
+            setupDoubleClickReset();
             
             window.addEventListener('resize', onWindowResize);
 
@@ -183,6 +211,13 @@
 
         function loadModelFromUrl(url, name) {
             const loader = new GLTFLoader();
+            
+            // === 性能优化：添加 Draco 解码器支持 ===
+            // 这允许加载极度压缩的 .glb 模型 (体积可小至 1/10)
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath('https://esm.sh/three@0.160.0/examples/jsm/libs/draco/');
+            loader.setDRACOLoader(dracoLoader);
+
             loader.load(url, (gltf) => {
                 processAndPlaceModel(gltf.scene, name);
                 revealScene();
@@ -305,7 +340,6 @@
             labelMesh.rotation.x = 0; 
             scene.add(labelMesh);
 
-            // === 修改 3: 极致碰撞 (0.1m) ===
             colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.1; 
             
             isModelLoaded = true;
@@ -313,7 +347,7 @@
 
         function revealScene() {
             setTimeout(() => {
-                gsap.to(introOverlayDiv, { opacity: 0, duration: 2.5, ease: "power2.inOut", onComplete: () => { 
+                gsap.to(introOverlayDiv, { opacity: 0, duration: 1.5, ease: "power2.inOut", onComplete: () => { 
                     introOverlayDiv.style.display = 'none'; 
                     clickCaptureDiv.style.display = 'block'; 
                     instructionText.style.opacity = '1'; 
@@ -321,99 +355,129 @@
             }, 100);
         }
 
-        // === 修改 2: 双击自动复位 ===
         function setupDoubleClickReset() {
             window.addEventListener('dblclick', () => {
                 if (!isModelLoaded) return;
-                
-                // 平滑复位相机位置和角度
-                gsap.to(camera.position, {
-                    x: 0, y: 1.7, z: 4,
-                    duration: 1.5,
-                    ease: "power2.inOut"
-                });
-                
-                // 让相机看向雕塑中心
-                // 为了平滑 LookAt，我们用一个临时对象 tween 它的 quaternion
+                gsap.to(camera.position, { x: 0, y: 1.7, z: 4, duration: 1.5, ease: "power2.inOut" });
                 const tempCam = camera.clone();
                 tempCam.position.set(0, 1.7, 4);
-                tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z); // 看向雕塑中部
-                
-                gsap.to(camera.quaternion, {
-                    x: tempCam.quaternion.x,
-                    y: tempCam.quaternion.y,
-                    z: tempCam.quaternion.z,
-                    w: tempCam.quaternion.w,
-                    duration: 1.5,
-                    ease: "power2.inOut",
-                    onUpdate: () => {
-                        // 在动画过程中如果你正在移动鼠标，可能会冲突，但双击复位通常意味着用户想要重置
-                        // 更新 controls 内部的状态以防跳变
-                        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-                        euler.setFromQuaternion(camera.quaternion);
-                        // PointerLockControls 依赖内部的 pitch/yaw，这里稍微 hack 一下不太容易完美兼容
-                        // 但对于 "复位" 视觉效果来说，GSAP 直接动 camera 是最直观的
-                    }
-                });
+                tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
+                gsap.to(camera.quaternion, { x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, duration: 1.5, ease: "power2.inOut" });
             });
         }
 
-        // === 修改 5: 移动端触控逻辑 ===
-        function setupMobileControls() {
+        // === 新的触控逻辑 (摇杆 + 滑动) ===
+        function setupTouchControls() {
+            const joystickZone = document.getElementById('joystick-zone');
+            const joystickKnob = document.getElementById('joystick-knob');
+            const zoneRect = joystickZone.getBoundingClientRect();
+            const center = { x: zoneRect.width / 2, y: zoneRect.height / 2 };
+            const maxRadius = zoneRect.width / 2;
+
+            let joystickTouchId = null;
+
+            // 1. 摇杆控制 (移动)
+            joystickZone.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.changedTouches[0];
+                joystickTouchId = touch.identifier;
+                updateJoystick(touch);
+            }, {passive: false});
+
+            joystickZone.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joystickTouchId) {
+                        updateJoystick(e.changedTouches[i]);
+                        break;
+                    }
+                }
+            }, {passive: false});
+
+            const endJoystick = (e) => {
+                 for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joystickTouchId) {
+                        joystickTouchId = null;
+                        joystickVector = { x: 0, y: 0 };
+                        // 复位 UI
+                        gsap.to(joystickKnob, { left: '50%', top: '50%', duration: 0.2 });
+                        break;
+                    }
+                }
+            };
+            joystickZone.addEventListener('touchend', endJoystick);
+            joystickZone.addEventListener('touchcancel', endJoystick);
+
+            function updateJoystick(touch) {
+                const rect = joystickZone.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                let dx = x - center.x;
+                let dy = y - center.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                
+                // 限制在圆内
+                if (distance > maxRadius) {
+                    const angle = Math.atan2(dy, dx);
+                    dx = Math.cos(angle) * maxRadius;
+                    dy = Math.sin(angle) * maxRadius;
+                }
+
+                // 移动 Knob UI
+                joystickKnob.style.left = (center.x + dx) + 'px';
+                joystickKnob.style.top = (center.y + dy) + 'px';
+
+                // 计算输出向量 (-1 到 1)
+                // y轴反转，因为屏幕向下是Y正，而3D里前进需要负值
+                joystickVector.x = dx / maxRadius; 
+                joystickVector.y = dy / maxRadius; 
+            }
+
+            // 2. 屏幕其他区域控制 (视角)
             document.addEventListener('touchstart', (e) => {
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-                isTouching = true;
+                // 如果点到了摇杆，忽略
+                if (e.target.closest('#joystick-zone')) return;
+
+                const touch = e.changedTouches[0];
+                lookTouchId = touch.identifier;
+                lastLookX = touch.clientX;
+                lastLookY = touch.clientY;
             }, {passive: false});
 
             document.addEventListener('touchmove', (e) => {
-                if (!isTouching) return;
-                e.preventDefault(); // 防止滚动
-
-                const touchX = e.touches[0].clientX;
-                const touchY = e.touches[0].clientY;
-
-                const deltaX = touchX - touchStartX;
-                const deltaY = touchY - touchStartY;
-
-                // 1. 左右滑动 = 旋转 (无延迟，跟手)
-                // 灵敏度调整
-                const rotateSpeed = 0.004; 
-                camera.rotation.y -= deltaX * rotateSpeed;
-
-                // 2. 上下滑动 = 前后移动 (平滑非线性)
-                // 设定一个死区 (Deadzone)，防止轻微抖动误触
-                const moveThreshold = 20; 
-                
-                if (deltaY < -moveThreshold) {
-                    // 手指向上滑 -> 向前走
-                    moveForward = true;
-                    moveBackward = false;
-                } else if (deltaY > moveThreshold) {
-                    // 手指向下滑 -> 向后退
-                    moveBackward = true;
-                    moveForward = false;
-                } else {
-                    // 在死区内，停止动力（会有惯性滑行）
-                    moveForward = false;
-                    moveBackward = false;
+                // 如果不是视角控制的手指，忽略
+                let touch = null;
+                for(let i=0; i<e.changedTouches.length; i++) {
+                    if(e.changedTouches[i].identifier === lookTouchId) {
+                        touch = e.changedTouches[i];
+                        break;
+                    }
                 }
+                if (!touch) return;
+                
+                const deltaX = touch.clientX - lastLookX;
+                const deltaY = touch.clientY - lastLookY;
 
-                // 更新起始点，实现连续拖动逻辑 (对于旋转很重要，对于移动则形成“油门”感)
-                // 注意：为了让移动像油门一样（按住不放持续加速），我们只更新X，保留Y的初始参照？
-                // 不，为了体验最好：
-                // 旋转：增量式更新 (Delta applied, then reset reference)
-                touchStartX = touchX; 
-                // 移动：绝对式更新 (相对于最初按下的位置) -> 油门踏板模式
-                // 现在的逻辑里 touchStartY 不更新，所以你手指推得越远，deltaY越大
-                // 但为了配合 animate 里的简单 boolean 逻辑，我们只需要知道方向即可。
+                lastLookX = touch.clientX;
+                lastLookY = touch.clientY;
+
+                // 旋转相机
+                const sensitivity = 0.003;
+                camera.rotation.y -= deltaX * sensitivity;
+                camera.rotation.x -= deltaY * sensitivity;
+                // 限制上下视角
+                camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
                 
             }, {passive: false});
 
-            document.addEventListener('touchend', () => {
-                isTouching = false;
-                moveForward = false;
-                moveBackward = false;
+            document.addEventListener('touchend', (e) => {
+                for(let i=0; i<e.changedTouches.length; i++) {
+                    if(e.changedTouches[i].identifier === lookTouchId) {
+                        lookTouchId = null;
+                        break;
+                    }
+                }
             });
         }
 
@@ -422,11 +486,11 @@
             controls.addEventListener('lock', () => { clickCaptureDiv.style.display = 'none'; instructionText.style.opacity = '0'; }); 
             controls.addEventListener('unlock', () => { if (isModelLoaded) { clickCaptureDiv.style.display = 'block'; instructionText.style.opacity = '1'; } }); 
             
-            // 区分设备：如果是触屏，不需要点击锁定
+            // 区分设备
             if (!('ontouchstart' in window)) {
                 clickCaptureDiv.addEventListener('click', () => controls.lock());
             } else {
-                clickCaptureDiv.style.display = 'none'; // 移动端不需要捕获层
+                clickCaptureDiv.style.display = 'none'; 
             }
         }
         
@@ -437,41 +501,44 @@
         function animate() { 
             requestAnimationFrame(animate); 
             const time = performance.now(); 
-            
-            // 无论是否 Locked (桌面)，只要有输入状态就更新物理
-            // 这样移动端 touch 也能驱动 velocity
             const delta = (time - prevTime) / 1000;
             
+            // 惯性阻尼
             velocity.x -= velocity.x * 10.0 * delta; 
             velocity.z -= velocity.z * 10.0 * delta; 
             
+            // 键盘输入
             direction.z = Number(moveForward) - Number(moveBackward); 
             direction.x = Number(moveRight) - Number(moveLeft); 
             direction.normalize(); 
-            
-            // 移动端没有左右平移键(AD)，只有前后
+
+            // 混合输入：键盘 + 摇杆
+            // 键盘
             if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; 
             if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
+            
+            // 摇杆 (如果有输入)
+            if (joystickVector.x !== 0 || joystickVector.y !== 0) {
+                 // 摇杆 y 对应 前后(z)，x 对应 左右(x)
+                 velocity.z -= -joystickVector.y * 80.0 * delta; // 负号因为 y向下是正
+                 velocity.x -= joystickVector.x * 80.0 * delta;
+            }
 
-            // 应用移动
-            // PointerLockControls 的 moveRight/moveForward 是基于相机朝向的，非常好用
-            // 即使没 Lock，我们也可以借用它的计算方法，或者手动计算
+            // 应用移动 (基于相机朝向)
             if (controls.isLocked) {
+                // 桌面 PointerLock 模式
                 controls.moveRight(-velocity.x * delta); 
                 controls.moveForward(-velocity.z * delta); 
             } else {
-                // 移动端/未锁定时手动应用基于相机朝向的移动
-                // 获取相机的前方和右方向量
+                // 移动端 / 自由模式
                 const camDir = new THREE.Vector3();
                 camera.getWorldDirection(camDir);
                 camDir.y = 0; camDir.normalize();
                 
                 const camRight = new THREE.Vector3();
-                camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); // Cross Y to get Right
+                camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); 
                 
-                // Forward/Back
                 camera.position.addScaledVector(camDir, -velocity.z * delta);
-                // Left/Right
                 camera.position.addScaledVector(camRight, -velocity.x * delta);
             }
 
