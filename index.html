@@ -54,7 +54,7 @@
         const direction = new THREE.Vector3();
 
         let sculptureWrapper;
-        let labelMesh; // 展签模型
+        let labelMesh; 
         let colliderRadius = 2.0;
         const targetPosition = new THREE.Vector3(0, 0, -6);
         let isModelLoaded = false;
@@ -100,11 +100,12 @@
             controls = new PointerLockControls(camera, document.body);
             setupControlsEvents(); setupKeyControls(); window.addEventListener('resize', onWindowResize);
 
-            if(db) loadDailyModel();
+            if(db) loadRandomModel(); // 之前是 loadDailyModel
             else loadDefaultSculpture();
         }
 
-        async function loadDailyModel() {
+        // === 修改 1: 随机模型逻辑 ===
+        async function loadRandomModel() {
             try {
                 const q = query(collection(db, "model_library"), where("active", "==", true));
                 const querySnapshot = await getDocs(q);
@@ -113,11 +114,10 @@
 
                 if (models.length === 0) { loadDefaultSculpture(); return; }
                 
-                models.sort((a, b) => a.uploadDate.seconds - b.uploadDate.seconds);
-                const today = new Date();
-                const dayIndex = Math.floor(today.getTime() / (1000 * 60 * 60 * 24));
-                const index = dayIndex % models.length;
+                // 纯随机算法
+                const index = Math.floor(Math.random() * models.length);
 
+                console.log(`Loading random model: ${models[index].name} (Index: ${index})`);
                 loadModelFromUrl(models[index].url, models[index].name);
 
             } catch (error) { console.error(error); loadDefaultSculpture(); }
@@ -140,58 +140,61 @@
             revealScene();
         }
 
-        // === 展签生成器 ===
+        // === 修改 2: 正方形小展签 ===
         function createMuseumLabel(modelName, sizeInfo) {
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; }
 
-            // 1. 生成 Mock 数据
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
             const cleanName = modelName.replace(".glb", "").replace(/^\d+_/, "").replace(/_/g, " ");
 
-            // 2. 使用 Canvas 绘制纹理
+            // Canvas 改为正方形
             const canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 512;
+            canvas.width = 512; canvas.height = 512; 
             const ctx = canvas.getContext('2d');
             
             // 背景
-            ctx.fillStyle = '#f9f9f9'; // 接近白色的纸张
-            ctx.fillRect(0, 0, 1024, 512);
+            ctx.fillStyle = '#f9f9f9'; 
+            ctx.fillRect(0, 0, 512, 512);
             
-            // 文字样式
+            // 样式调整以适应正方形
             ctx.fillStyle = '#111';
             ctx.textAlign = 'left';
             
-            // 标题 (Bold)
-            ctx.font = 'bold 80px Helvetica, Arial';
-            ctx.fillText(cleanName, 50, 120);
+            // 标题 (更小一点的字号)
+            ctx.font = 'bold 50px Helvetica, Arial';
+            ctx.fillText(cleanName, 40, 80);
 
             // 年份
-            ctx.font = '50px Helvetica, Arial';
+            ctx.font = '36px Helvetica, Arial';
             ctx.fillStyle = '#666';
-            ctx.fillText(mockYear, 50, 200);
+            ctx.fillText(mockYear, 40, 140);
 
             // 材质
-            ctx.font = '40px Helvetica, Arial';
-            ctx.fillStyle = '#333';
-            ctx.fillText(randMat, 50, 300);
-
-            // 描述
             ctx.font = '30px Helvetica, Arial';
-            ctx.fillStyle = '#555';
-            ctx.fillText(`Dimensions: ${sizeInfo}`, 50, 380);
-            ctx.fillText("Courtesy of the Digital Archive.", 50, 440);
+            ctx.fillStyle = '#333';
+            ctx.fillText(randMat, 40, 260);
 
-            // 边框装饰
+            // 尺寸
+            ctx.font = '24px Helvetica, Arial';
+            ctx.fillStyle = '#555';
+            ctx.fillText(sizeInfo, 40, 310);
+            
+            // 版权/Credit
+            ctx.font = '20px Helvetica, Arial';
+            ctx.fillStyle = '#999';
+            ctx.fillText("Courtesy of the Digital Archive", 40, 460);
+
+            // 边框
             ctx.strokeStyle = '#ddd';
-            ctx.lineWidth = 10;
-            ctx.strokeRect(0, 0, 1024, 512);
+            ctx.lineWidth = 8;
+            ctx.strokeRect(0, 0, 512, 512);
 
             const texture = new THREE.CanvasTexture(canvas);
             
-            // 3. 创建 3D 展签模型 (薄板)
-            const labelGeo = new THREE.BoxGeometry(0.6, 0.02, 0.3); // 宽0.6, 厚0.02, 深0.3
+            // 模型改为更小的正方形: 0.3m x 0.3m
+            const labelGeo = new THREE.BoxGeometry(0.3, 0.015, 0.3); 
             const labelMat = new THREE.MeshStandardMaterial({ 
                 map: texture, 
                 color: 0xffffff,
@@ -203,7 +206,6 @@
             return mesh;
         }
 
-        // === 核心：模型处理与展签放置 ===
         function processAndPlaceModel(rawModel, rawName) {
             if (sculptureWrapper) scene.remove(sculptureWrapper);
             if (labelMesh) scene.remove(labelMesh);
@@ -218,26 +220,21 @@
                 }
             });
 
-            // 1. 计算原始尺寸
             const box = new THREE.Box3().setFromObject(rawModel);
             const size = box.getSize(new THREE.Vector3());
             
-            // 2. 宏伟缩放 (Scale Up) - 目标尺寸增加到 5.0
             const maxDim = Math.max(size.x, size.y, size.z);
-            const targetSize = 5.0; // 更大，需要仰视
+            const targetSize = 5.0; 
             const scaleFactor = targetSize / maxDim;
             rawModel.scale.setScalar(scaleFactor);
             rawModel.position.set(0,0,0);
             rawModel.updateMatrixWorld(true);
 
-            // 3. 计算缩放后的 Box
             const newBox = new THREE.Box3().setFromObject(rawModel);
             const newCenter = newBox.getCenter(new THREE.Vector3());
             const finalSize = newBox.getSize(new THREE.Vector3());
 
-            // 4. 包装器处理
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
-            // 居中并落地
             rawModel.position.x = -newCenter.x;
             rawModel.position.z = -newCenter.z;
             rawModel.position.y = -newBox.min.y; 
@@ -246,22 +243,17 @@
             sculptureWrapper.position.copy(targetPosition);
             sculptureWrapper.rotation.y = -Math.PI / 6;
 
-            // 5. 放置展签 (Placard)
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
             
-            // 计算放置位置：放在模型包围盒的正前方 (Z轴正方向)
-            // 获取Wrapper的世界位置
             const wrapperZ = targetPosition.z;
-            // 模型的半径大致是 finalSize.z / 2
-            // 展签放在模型前方 1.0 米处
             const labelZ = wrapperZ + (finalSize.z / 2) + 1.2; 
             
-            labelMesh.position.set(0, 0.01, labelZ); // 0.01 避免Z-fighting
-            labelMesh.rotation.x = 0; // 平放在地
+            labelMesh.position.set(0, 0.01, labelZ); 
+            labelMesh.rotation.x = 0; 
             scene.add(labelMesh);
 
-            colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 1.5; // 碰撞半径也增大
+            colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 1.5; 
             isModelLoaded = true;
         }
 
