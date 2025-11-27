@@ -35,21 +35,21 @@
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
-        /* === 修改 3: 隐形极简摇杆 === */
+        /* 隐形极简摇杆 */
         #joystick-zone {
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
-            width: 160px; height: 160px; /* 触摸区域大，防误触 */
+            width: 160px; height: 160px; 
             z-index: 1500; display: none;
         }
         .joystick-base {
             width: 100%; height: 100%;
-            background: transparent; /* 完全透明 */
+            background: transparent;
             border: none;
             position: relative;
         }
         .joystick-knob {
             width: 40px; height: 40px; 
-            background: rgba(0, 0, 0, 0.2); /* 仅显示这个小圆点 */
+            background: rgba(0, 0, 0, 0.2); 
             border-radius: 50%;
             position: absolute;
             top: 50%; left: 50%;
@@ -136,7 +136,8 @@
         let lookTouchId = null;
         let lastLookX = 0;
         let lastLookY = 0;
-        let lastTapTime = 0; // 用于双击检测
+        let lastTapTime = 0; 
+        let lastTapPos = { x: 0, y: 0 }; // 记录上次点击位置
 
         init();
         animate();
@@ -147,7 +148,6 @@
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.7, 4); 
             
-            // === 修改 2: 锁定旋转顺序防止倾斜 ===
             camera.rotation.order = 'YXZ'; 
 
             // Lighting
@@ -189,7 +189,7 @@
             setupControlsEvents(); 
             setupKeyControls(); 
             setupTouchControls(); 
-            setupDoubleClickReset(); // === 修改 4: 修复双击 ===
+            setupDoubleClickReset(); 
             
             window.addEventListener('resize', onWindowResize);
 
@@ -355,13 +355,11 @@
             }, 100);
         }
 
-        // === 修改 4: 快速复位 + 兼容移动端双击 ===
-        function resetCamera() {
+        // === 修改 4: 快速复位 (支持参数) ===
+        function resetCamera(duration = 1.5, ease = "power2.inOut") {
              if (!isModelLoaded) return;
-             // 极速复位 (0.5s)
-             gsap.to(camera.position, { x: 0, y: 1.7, z: 4, duration: 0.5, ease: "power3.out" });
+             gsap.to(camera.position, { x: 0, y: 1.7, z: 4, duration: duration, ease: ease });
              
-             // 计算Quaternion目标
              const tempCam = camera.clone();
              tempCam.position.set(0, 1.7, 4);
              tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
@@ -371,25 +369,33 @@
                  y: tempCam.quaternion.y, 
                  z: tempCam.quaternion.z, 
                  w: tempCam.quaternion.w, 
-                 duration: 0.5, 
-                 ease: "power3.out" 
+                 duration: duration, 
+                 ease: ease 
              });
         }
 
         function setupDoubleClickReset() {
-            // 桌面端
-            window.addEventListener('dblclick', resetCamera);
+            // 桌面端: 极速复位 (0.15s)
+            window.addEventListener('dblclick', () => {
+                resetCamera(0.15, "expo.out");
+            });
             
-            // 移动端模拟双击
+            // 移动端: 普通速度 (0.5s) + 严格判定
             document.addEventListener('touchstart', (e) => {
                 const currentTime = new Date().getTime();
                 const tapLength = currentTime - lastTapTime;
-                if (tapLength < 300 && tapLength > 0) {
-                    // 检测到双击
-                    e.preventDefault(); // 防止缩放
-                    resetCamera();
+                const touch = e.changedTouches[0];
+                
+                // 计算距离，防止滑动误判
+                const dist = Math.sqrt(Math.pow(touch.clientX - lastTapPos.x, 2) + Math.pow(touch.clientY - lastTapPos.y, 2));
+
+                if (tapLength < 250 && tapLength > 0 && dist < 30) { 
+                    e.preventDefault(); 
+                    resetCamera(0.5, "power2.inOut");
+                } else {
+                    lastTapPos = { x: touch.clientX, y: touch.clientY };
+                    lastTapTime = currentTime;
                 }
-                lastTapTime = currentTime;
             }, { passive: false });
         }
 
@@ -482,12 +488,10 @@
                 lastLookX = touch.clientX;
                 lastLookY = touch.clientY;
 
-                // === 修改 1: 提升灵敏度 ===
-                const sensitivity = 0.008; // 3x faster
+                const sensitivity = 0.01; 
                 
-                // === 修改 2: 锁定旋转轴 (YXZ Order) ===
-                camera.rotation.y -= deltaX * sensitivity; // 只动 Y
-                camera.rotation.x -= deltaY * sensitivity; // 只动 X
+                camera.rotation.y -= deltaX * sensitivity; 
+                camera.rotation.x -= deltaY * sensitivity; 
                 
                 camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
                 
