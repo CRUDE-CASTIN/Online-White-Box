@@ -165,49 +165,32 @@
             return mesh;
         }
 
-        // === 核心功能：智能计算实心高度（去除虚高） ===
+        // === 智能实心高度算法 ===
         function getSolidHeight(model) {
             const yCoords = [];
-            
-            // 1. 采样：遍历所有 Mesh 的顶点
             model.traverse((child) => {
                 if (child.isMesh && child.geometry) {
                     const pos = child.geometry.attributes.position;
-                    // 为了性能，不遍历所有点，每隔 5 个点采样一次
-                    // 并应用世界变换矩阵（假设模型此时在原点，无旋转缩放）
                     const v = new THREE.Vector3();
                     for (let i = 0; i < pos.count; i += 5) {
                         v.fromBufferAttribute(pos, i);
-                        // 应用本地变换（如果有子层级变换）
                         v.applyMatrix4(child.matrix);
                         yCoords.push(v.y);
                     }
                 }
             });
-
-            if (yCoords.length === 0) return 1.0; // 兜底
-
-            // 2. 排序
+            if (yCoords.length === 0) return 1.0; 
             yCoords.sort((a, b) => a - b);
-
-            // 3. 统计学去噪：掐头去尾 (Top 2% and Bottom 2%)
-            // 这能有效忽略飘在空中的孤立顶点
             const trimStart = Math.floor(yCoords.length * 0.02); 
             const trimEnd = Math.floor(yCoords.length * 0.98);
-            
-            // 确保索引有效
             const minY = yCoords[trimStart] || yCoords[0];
             const maxY = yCoords[trimEnd] || yCoords[yCoords.length - 1];
-
             let height = maxY - minY;
-            
-            // 4. 安全检查：如果高度几乎为0（比如平面），则退回到普通包围盒高度
             if (height < 0.1) {
                 const box = new THREE.Box3().setFromObject(model);
                 const size = box.getSize(new THREE.Vector3());
                 height = size.y;
             }
-
             return height;
         }
 
@@ -225,24 +208,23 @@
                 }
             });
 
-            // 1. 归一化初始状态
+            // 1. 归一化
             rawModel.position.set(0,0,0);
             rawModel.scale.set(1,1,1);
             rawModel.rotation.set(0,0,0);
             rawModel.updateMatrixWorld(true);
 
-            // 2. 使用智能算法计算“实心高度”
+            // 2. 智能计算“实心高度”
             const solidHeight = getSolidHeight(rawModel);
             
-            // 3. 计算缩放比例：目标高度 5.0m
-            const targetHeight = 5.0;
+            // 3. 计算缩放比例：目标高度改为 3.5m
+            const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
             
-            // 应用缩放
             rawModel.scale.setScalar(scaleFactor);
             rawModel.updateMatrixWorld(true);
 
-            // 4. 计算缩放后的最终包围盒（用于居中和展签位置）
+            // 4. 计算最终包围盒
             const newBox = new THREE.Box3().setFromObject(rawModel);
             const newCenter = newBox.getCenter(new THREE.Vector3());
             const finalSize = newBox.getSize(new THREE.Vector3());
@@ -252,7 +234,7 @@
             // 5. 居中并落地
             rawModel.position.x = -newCenter.x;
             rawModel.position.z = -newCenter.z;
-            rawModel.position.y = -newBox.min.y; // 底部对齐
+            rawModel.position.y = -newBox.min.y; 
             sculptureWrapper.add(rawModel);
 
             sculptureWrapper.position.copy(targetPosition);
@@ -262,14 +244,13 @@
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
             
             const wrapperZ = targetPosition.z;
-            // 展签放在模型前方 1.0 米处
             const labelZ = wrapperZ + (finalSize.z / 2) + 1.0; 
             
             labelMesh.position.set(0, 0.01, labelZ); 
             labelMesh.rotation.x = 0; 
             scene.add(labelMesh);
 
-            // 碰撞体积：更紧凑 (0.4m 缓冲)
+            // 6. 碰撞体积 (0.4m 紧凑缓冲)
             colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.4; 
             
             isModelLoaded = true;
