@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无暇纯白艺术馆 - Online Gallery</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: sans-serif; }
+        #intro-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 1000; pointer-events: none; }
+        #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
+        #loading-text {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #ccc; font-size: 14px; letter-spacing: 2px; z-index: 1001; pointer-events: none;
+            text-align: center;
+        }
+        #instruction {
+             position: absolute; bottom: 30px; width: 100%; text-align: center;
+             color: #999; font-size: 12px; z-index: 999; pointer-events: none; opacity: 0; transition: opacity 0.5s;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="intro-overlay"></div>
+    <div id="loading-text">正在连接云端展厅...</div>
+    <div id="click-capture"></div>
+    <div id="instruction">点击屏幕开始漫游 | WASD 移动</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import gsap from 'gsap';
+        
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // ======================================================
+        // TODO: 请将下方花括号内的内容替换为你的 firebaseConfig
+        // ======================================================
+        const firebaseConfig = {
+               apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
+  	authDomain: "online-white-box.firebaseapp.com",
+  	projectId: "online-white-box",
+  	storageBucket: "online-white-box.firebasestorage.app",
+  	messagingSenderId: "227799896378",
+  	appId: "1:227799896378:web:94e416ee99d0e720e18003",
+  	measurementId: "G-G2ZWQZ8W8F"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let camera, scene, renderer, controls;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let prevTime = performance.now();
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+
+        let sculptureWrapper;
+        let colliderRadius = 2.0;
+        const targetPosition = new THREE.Vector3(0, 0, -6);
+
+        let isIntroFinished = false;
+        const clickCaptureDiv = document.getElementById('click-capture');
+        const introOverlayDiv = document.getElementById('intro-overlay');
+        const instructionText = document.getElementById('instruction');
+        const loadingText = document.getElementById('loading-text');
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xffffff);
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.7, 4); 
+
+            // 光照设置
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); hemiLight.position.set(0, 20, 0); scene.add(hemiLight);
+            const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); keyLight.position.set(8, 12, 8); keyLight.castShadow = true;
+            keyLight.shadow.mapSize.set(4096, 4096); keyLight.shadow.bias = -0.0001; keyLight.shadow.radius = 2;
+            const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; scene.add(keyLight);
+            const fillLight = new THREE.DirectionalLight(0xffeedd, 1.5); fillLight.position.set(-8, 5, 8); scene.add(fillLight);
+            const topLight = new THREE.DirectionalLight(0xffffff, 0.5); topLight.position.set(0, 10, 0); scene.add(topLight);
+
+            const pmremGenerator = new THREE.PMREMGenerator( new THREE.WebGLRenderer() );
+            pmremGenerator.compileEquirectangularShader();
+            scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
+
+            const planeGeometry = new THREE.PlaneGeometry(200, 200);
+            const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.15 });
+            const floor = new THREE.Mesh(planeGeometry, shadowMaterial);
+            floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.outputColorSpace = THREE.SRGBColorSpace; 
+            renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.5;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new PointerLockControls(camera, document.body);
+            setupControlsEvents(); setupKeyControls(); window.addEventListener('resize', onWindowResize);
+
+            // === 监听云端数据变化 ===
+            listenToCloudUpdates();
+        }
+
+        function listenToCloudUpdates() {
+            // 监听 Firestore 中的 'settings/gallery_display' 文档
+            // 一旦后台更新，这里会自动收到通知
+            onSnapshot(doc(db, "settings", "gallery_display"), (doc) => {
+                if (doc.exists()) {
+                    const data = doc.data();
+                    loadingText.innerText = "检测到新展品，正在加载: " + data.modelName;
+                    loadingText.style.display = 'block';
+                    loadModelFromUrl(data.modelUrl);
+                } else {
+                    // 数据库是空的，加载默认
+                    loadDefaultSculpture();
+                }
+            }, (error) => {
+                console.error("云端获取失败:", error);
+                loadingText.innerText = "连接云端失败，加载本地默认...";
+                loadDefaultSculpture();
+            });
+        }
+
+        function loadModelFromUrl(url) {
+            const loader = new GLTFLoader();
+            loader.load(url, (gltf) => {
+                processAndPlaceModel(gltf.scene);
+                if(!isIntroFinished) startIntroAnimation();
+                else loadingText.style.display = 'none'; // 如果是热更新，加载完隐藏提示
+            }, 
+            (xhr) => {
+                const percent = Math.round((xhr.loaded / xhr.total * 100));
+                if(isFinite(percent)) loadingText.innerText = `正在下载模型资源: ${percent}%`;
+            },
+            (err) => {
+                console.error(err);
+                alert("模型加载出错");
+            });
+        }
+
+        function loadDefaultSculpture() {
+            const group = new THREE.Group();
+            const material = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2, metalness: 0.8 });
+            const geo = new THREE.TorusKnotGeometry(0.8, 0.25, 128, 64);
+            const mesh = new THREE.Mesh(geo, material); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+            processAndPlaceModel(group);
+            startIntroAnimation();
+        }
+
+        function processAndPlaceModel(rawModel) {
+            if (sculptureWrapper) scene.remove(sculptureWrapper);
+            rawModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true; child.receiveShadow = true;
+                    if (child.material && child.material.color) {
+                         if(child.material.color.r < 0.1 && child.material.color.g < 0.1 && child.material.color.b < 0.1) child.material.color.setHex(0xaaaaaa);
+                         child.material.needsUpdate = true;
+                    }
+                }
+            });
+            const box = new THREE.Box3().setFromObject(rawModel);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const scaleFactor = 3.5 / maxDim;
+            rawModel.scale.setScalar(scaleFactor);
+            rawModel.position.set(0,0,0);
+            rawModel.updateMatrixWorld(true);
+            const newBox = new THREE.Box3().setFromObject(rawModel);
+            const newCenter = newBox.getCenter(new THREE.Vector3());
+            sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
+            rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; rawModel.position.y = -newBox.min.y; 
+            sculptureWrapper.add(rawModel);
+            sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = -Math.PI / 6;
+            const finalSize = newBox.getSize(new THREE.Vector3());
+            colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.8;
+        }
+
+        function startIntroAnimation() {
+            gsap.to(introOverlayDiv, { opacity: 0, duration: 2.5, ease: "power2.inOut", onComplete: () => { 
+                introOverlayDiv.style.display = 'none'; isIntroFinished = true; clickCaptureDiv.style.display = 'block'; instructionText.style.opacity = '1'; loadingText.style.display = 'none';
+            }});
+        }
+        function setupControlsEvents() { controls.addEventListener('lock', () => { clickCaptureDiv.style.display = 'none'; instructionText.style.opacity = '0'; }); controls.addEventListener('unlock', () => { if (isIntroFinished) { clickCaptureDiv.style.display = 'block'; instructionText.style.opacity = '1'; } }); clickCaptureDiv.addEventListener('click', () => controls.lock()); }
+        function setupKeyControls() { const onKeyDown = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = true; break; case 'ArrowLeft': case 'KeyA': moveLeft = true; break; case 'ArrowDown': case 'KeyS': moveBackward = true; break; case 'ArrowRight': case 'KeyD': moveRight = true; break; } }; const onKeyUp = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = false; break; case 'ArrowLeft': case 'KeyA': moveLeft = false; break; case 'ArrowDown': case 'KeyS': moveBackward = false; break; case 'ArrowRight': case 'KeyD': moveRight = false; break; } }; document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp); }
+        function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+        function checkCollision() { if (!sculptureWrapper) return; const playerPos = new THREE.Vector2(camera.position.x, camera.position.z); const objectPos = new THREE.Vector2(sculptureWrapper.position.x, sculptureWrapper.position.z); const distance = playerPos.distanceTo(objectPos); if (distance < colliderRadius) { const pushDir = playerPos.sub(objectPos).normalize(); const newPos = objectPos.add(pushDir.multiplyScalar(colliderRadius)); camera.position.x = newPos.x; camera.position.z = newPos.y; } }
+        function animate() { requestAnimationFrame(animate); const time = performance.now(); if (controls.isLocked === true) { const delta = (time - prevTime) / 1000; velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; direction.z = Number(moveForward) - Number(moveBackward); direction.x = Number(moveRight) - Number(moveLeft); direction.normalize(); if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); checkCollision(); } prevTime = time; renderer.render(scene, camera); }
+    </script>
+</body>
+</html>

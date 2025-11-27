@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>云端展厅后台</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f0f0; }
+        .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; width: 400px; }
+        h1 { margin-bottom: 30px; color: #333; }
+        .file-box { border: 2px dashed #ccc; padding: 40px; border-radius: 8px; margin-bottom: 20px; cursor: pointer; transition: all 0.3s; }
+        .file-box:hover { border-color: #666; background: #fafafa; }
+        button { background: #000; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-size: 16px; cursor: pointer; width: 100%; transition: transform 0.2s; }
+        button:hover { transform: scale(1.02); }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #status { margin-top: 20px; color: #666; font-size: 14px; min-height: 20px; }
+        .progress { width: 100%; height: 4px; background: #eee; margin-top: 10px; display:none; }
+        .bar { height: 100%; background: #000; width: 0%; transition: width 0.2s; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>☁️ 云端后台管理</h1>
+        <div class="file-box" onclick="document.getElementById('fileInput').click()">
+            <span id="fileName">点击选择 .glb / .gltf 模型</span>
+            <input type="file" id="fileInput" accept=".glb, .gltf" style="display: none" onchange="handleFileSelect(this)">
+        </div>
+        <div class="progress" id="progressBox"><div class="bar" id="progressBar"></div></div>
+        <button id="saveBtn" onclick="uploadToCloud()" disabled>发布到互联网</button>
+        <div id="status">连接云端中...</div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        // ======================================================
+        // TODO: 请将下方花括号内的内容替换为你的 firebaseConfig
+        // ======================================================
+        const firebaseConfig = {
+            	apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
+  	authDomain: "online-white-box.firebaseapp.com",
+  	projectId: "online-white-box",
+  	storageBucket: "online-white-box.firebasestorage.app",
+  	messagingSenderId: "227799896378",
+  	appId: "1:227799896378:web:94e416ee99d0e720e18003",
+  	measurementId: "G-G2ZWQZ8W8F"
+        };
+
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // 暴露给全局以便 HTML 调用
+        window.handleFileSelect = handleFileSelect;
+        window.uploadToCloud = uploadToCloud;
+
+        let selectedFile = null;
+        document.getElementById('status').innerText = "等待文件选择...";
+
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                selectedFile = input.files[0];
+                document.getElementById('fileName').innerText = "已选: " + selectedFile.name;
+                document.getElementById('saveBtn').disabled = false;
+                document.getElementById('status').innerText = "准备上传";
+            }
+        }
+
+        async function uploadToCloud() {
+            if (!selectedFile) return;
+            const btn = document.getElementById('saveBtn');
+            const status = document.getElementById('status');
+            const pBox = document.getElementById('progressBox');
+            const pBar = document.getElementById('progressBar');
+
+            btn.disabled = true;
+            pBox.style.display = 'block';
+
+            // 1. 上传文件到 Storage
+            const storageRef = ref(storage, 'models/current_display_model.glb');
+            const uploadTask = uploadBytesResumable(storageRef, selectedFile);
+
+            uploadTask.on('state_changed', 
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    pBar.style.width = progress + '%';
+                    status.innerText = `正在上传文件: ${Math.round(progress)}%`;
+                }, 
+                (error) => {
+                    console.error(error);
+                    status.innerText = "❌ 上传失败: " + error.message;
+                    btn.disabled = false;
+                }, 
+                async () => {
+                    // 2. 获取下载链接
+                    status.innerText = "正在更新数据库...";
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+
+                    // 3. 将链接写入 Firestore 数据库
+                    // 我们固定写入一个 ID 为 'gallery_settings' 的文档
+                    try {
+                        await setDoc(doc(db, "settings", "gallery_display"), {
+                            modelUrl: downloadURL,
+                            modelName: selectedFile.name,
+                            updatedAt: new Date()
+                        });
+                        status.innerText = "✅ 发布成功！全球展厅已更新。";
+                        btn.innerText = "发布成功";
+                    } catch (e) {
+                        console.error(e);
+                        status.innerText = "❌ 数据库写入失败";
+                    }
+                }
+            );
+        }
+    </script>
+</body>
+</html>
