@@ -72,12 +72,32 @@
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.7, 4); 
 
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); hemiLight.position.set(0, 20, 0); scene.add(hemiLight);
-            const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); keyLight.position.set(8, 12, 8); keyLight.castShadow = true;
-            keyLight.shadow.mapSize.set(4096, 4096); keyLight.shadow.bias = -0.0001; keyLight.shadow.radius = 2;
-            const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; scene.add(keyLight);
-            const fillLight = new THREE.DirectionalLight(0xffeedd, 1.5); fillLight.position.set(-8, 5, 8); scene.add(fillLight);
-            const topLight = new THREE.DirectionalLight(0xffffff, 0.5); topLight.position.set(0, 10, 0); scene.add(topLight);
+            // === 修改点：光照位置 ===
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); 
+            hemiLight.position.set(0, 20, 0); 
+            scene.add(hemiLight);
+
+            const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); 
+            // 位置设置：X=0(正中), Y=15(正上方高处), Z=0(位于相机和雕塑之间)
+            // 雕塑在 Z=-6，所以 Z=0 是在雕塑的前方。光线从上方+前方射下。
+            keyLight.position.set(0, 15, 0); 
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.set(4096, 4096); 
+            keyLight.shadow.bias = -0.0001; 
+            keyLight.shadow.radius = 2;
+            const d = 15; 
+            keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; 
+            keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
+            scene.add(keyLight);
+
+            const fillLight = new THREE.DirectionalLight(0xffeedd, 1.5); 
+            fillLight.position.set(-8, 5, 8); 
+            scene.add(fillLight);
+            
+            // 额外的顶光增加神圣感
+            const topLight = new THREE.DirectionalLight(0xffffff, 0.8); 
+            topLight.position.set(0, 10, -6); // 正对着雕塑头顶
+            scene.add(topLight);
 
             const pmremGenerator = new THREE.PMREMGenerator( new THREE.WebGLRenderer() );
             pmremGenerator.compileEquirectangularShader();
@@ -217,7 +237,7 @@
             // 2. 智能计算“实心高度”
             const solidHeight = getSolidHeight(rawModel);
             
-            // 3. 计算缩放比例：目标高度改为 3.5m
+            // 3. 计算缩放比例：目标高度 3.5m
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
             
@@ -238,7 +258,9 @@
             sculptureWrapper.add(rawModel);
 
             sculptureWrapper.position.copy(targetPosition);
-            sculptureWrapper.rotation.y = -Math.PI / 6;
+            
+            // === 修改点：移除旋转，保持 0 ===
+            sculptureWrapper.rotation.y = 0; 
 
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
@@ -250,7 +272,6 @@
             labelMesh.rotation.x = 0; 
             scene.add(labelMesh);
 
-            // 6. 碰撞体积 (0.4m 紧凑缓冲)
             colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.4; 
             
             isModelLoaded = true;
