@@ -18,7 +18,8 @@
             z-index: 2000; 
             pointer-events: none; 
             display: flex; justify-content: center; align-items: center;
-            opacity: 1; transition: opacity 1s ease-out;
+            opacity: 1; 
+            /* === 修复核心：移除了这里的 transition，避免与 JS 动画冲突 === */
         }
 
         #loading-msg {
@@ -212,8 +213,6 @@
         function loadModelFromUrl(url, name) {
             const loader = new GLTFLoader();
             const dracoLoader = new DRACOLoader();
-            
-            // === 修复核心：使用 Google 官方 CDN 作为解码器源，极其稳定 ===
             dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
             loader.setDRACOLoader(dracoLoader);
 
@@ -222,7 +221,6 @@
                 revealScene();
             }, undefined, (err) => { 
                 console.error("Load failed:", err);
-                // 即使加载失败，也尝试展示（可能会展示默认或空场景），避免永久白屏
                 revealScene(); 
             });
         }
@@ -348,13 +346,19 @@
             isModelLoaded = true;
         }
 
+        // === 修复: 移除CSS transition，使用纯GSAP ===
         function revealScene() {
             setTimeout(() => {
-                gsap.to(introOverlayDiv, { opacity: 0, duration: 1.5, ease: "power2.inOut", onComplete: () => { 
-                    introOverlayDiv.style.display = 'none'; 
-                    clickCaptureDiv.style.display = 'block'; 
-                    instructionText.style.opacity = '1'; 
-                }});
+                gsap.to(introOverlayDiv, { 
+                    opacity: 0, 
+                    duration: 2.0, // 稍微加长一点时间，更优雅
+                    ease: "power2.inOut", 
+                    onComplete: () => { 
+                        introOverlayDiv.style.display = 'none'; 
+                        clickCaptureDiv.style.display = 'block'; 
+                        instructionText.style.opacity = '1'; 
+                    }
+                });
             }, 100);
         }
 
