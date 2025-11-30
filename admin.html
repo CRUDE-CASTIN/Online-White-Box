@@ -2,87 +2,157 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gallery Asset Manager</title>
+    <title>VOID ARCHIVE // CONSOLE</title>
     <style>
-        :root { --primary: #000; --bg: #f5f5f7; --card-bg: #fff; --accent: #ff4757; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); margin: 0; padding: 40px; color: #333; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        
-        /* 上传区样式保持不变 */
-        .upload-section { background: var(--card-bg); padding: 40px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 40px; }
-        .upload-box { border: 2px dashed #ddd; border-radius: 12px; padding: 40px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; }
-        .upload-box:hover { border-color: #999; background: #fafafa; }
-        #preview-canvas-container { width: 150px; height: 150px; border-radius: 8px; overflow: hidden; background: #eee; margin-bottom: 15px; display: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        button.btn-primary { background: var(--primary); color: white; border: none; padding: 12px 30px; border-radius: 30px; font-size: 16px; cursor: pointer; margin-top: 20px; transition: transform 0.2s; }
-        button.btn-primary:disabled { background: #ccc; cursor: not-allowed; transform: none; }
-        
-        .progress-container { width: 100%; max-width: 400px; margin: 20px auto 0; text-align: left; display: none; }
-        .progress-bar-bg { width: 100%; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 5px; }
-        .progress-bar-fill { height: 100%; background: #4CAF50; width: 0%; transition: width 0.3s; }
-        .progress-text { font-size: 12px; color: #666; display: flex; justify-content: space-between; margin-top: 5px; }
-        #status { margin-top: 10px; color: #666; font-size: 14px; font-weight: 500; }
-
-        /* === 新版卡片 Grid 样式 === */
-        .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 25px; }
-        
-        .card { 
-            background: var(--card-bg); border-radius: 16px; overflow: hidden; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; position: relative; 
+        :root { 
+            --bg: #f2f2f2; 
+            --surface: #ffffff; 
+            --line: #e0e0e0; 
+            --text-main: #111; 
+            --text-dim: #888;
+            --accent: #000;
+            --alert: #ff3b30;
         }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 12px 30px rgba(0,0,0,0.1); }
         
-        .card-thumb { width: 100%; height: 220px; background: #f9f9f9; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; }
-        .card-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .no-thumb { font-size: 40px; color: #ddd; }
-        
-        .card-info { padding: 15px; border-top: 1px solid #f0f0f0; }
-        .card-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; color: #333; }
-        .card-meta { font-size: 12px; color: #999; }
+        * { box-sizing: border-box; }
+        body { 
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+            background: var(--bg); 
+            color: var(--text-main); 
+            margin: 0; padding: 0; 
+            height: 100vh; 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column;
+        }
 
-        /* === UI 组件：置顶书签 === */
-        .pin-badge {
-            position: absolute; top: 0; left: 12px;
-            width: 30px; height: 40px;
-            background: #ccc; /* 默认灰色 */
-            color: white;
-            display: flex; justify-content: center; align-items: flex-start;
-            padding-top: 8px; font-size: 16px;
-            cursor: pointer; z-index: 10;
-            clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+        /* === 1. 顶部仪表盘 (Analytics Dashboard) === */
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--line);
+            padding: 0 30px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .brand { font-weight: 700; letter-spacing: -0.5px; font-size: 18px; }
+        
+        .metrics { display: flex; gap: 40px; height: 100%; align-items: center; }
+        .metric-item { display: flex; flex-direction: column; justify-content: center; min-width: 120px; }
+        .metric-label { font-size: 10px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 4px; }
+        .metric-value { font-family: 'Courier New', monospace; font-weight: 700; font-size: 16px; }
+        
+        /* 进度条样式 */
+        .progress-track { width: 100%; height: 4px; background: #eee; margin-top: 4px; border-radius: 2px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease; }
+        .progress-fill.warning { background: #ffcc00; }
+        .progress-fill.danger { background: var(--alert); }
+
+        /* === 2. 主体布局 (Split View) === */
+        main { display: flex; flex: 1; overflow: hidden; }
+
+        /* 左侧：网格列表 + 上传 */
+        .library-panel {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            border-right: 1px solid var(--line);
+        }
+
+        /* 上传区域 (更加紧凑) */
+        .upload-compact {
+            background: var(--surface);
+            border: 1px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             transition: all 0.2s;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            cursor: pointer;
         }
-        .pin-badge:hover { height: 45px; background: #999; }
-        .pin-badge.active { background: var(--accent); } /* 激活红色 */
-        .pin-badge.active:hover { background: #ff6b81; }
+        .upload-compact:hover { border-color: #666; background: #fff; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .upload-status { font-size: 13px; color: var(--text-dim); }
+        .btn-upload { background: var(--accent); color: #fff; border: none; padding: 8px 20px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .btn-upload:disabled { background: #ccc; cursor: not-allowed; }
 
-        /* === UI 组件：功能按钮 === */
-        .btn-circle {
-            width: 36px; height: 36px; border-radius: 50%;
-            display: flex; justify-content: center; align-items: center;
-            border: none; cursor: pointer;
-            position: absolute; z-index: 10;
-            transition: all 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        /* 网格 */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 15px;
+        }
+        .grid-item {
+            background: var(--surface);
+            border: 1px solid transparent;
+            aspect-ratio: 1;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .grid-item:hover { border-color: #999; }
+        .grid-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+        .grid-item img { width: 100%; height: 100%; object-fit: cover; }
+        .grid-item .no-thumb { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #ccc; font-size: 24px; }
+        
+        /* 状态标记 */
+        .status-dot { position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.pinned { background: var(--alert); box-shadow: 0 0 4px rgba(255, 59, 48, 0.5); }
+
+        /* === 3. 右侧：检查器 (Inspector) === */
+        .inspector-panel {
+            width: 360px;
+            background: var(--surface);
+            padding: 30px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
         }
         
-        /* 下载按钮 (右下) */
-        .download-btn {
-            bottom: 10px; right: 10px;
-            background: white; color: #333;
-            font-size: 18px;
+        .inspector-empty { color: var(--text-dim); font-size: 14px; text-align: center; margin-top: 100px; }
+        
+        /* 检查器内容 */
+        .preview-large {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #f9f9f9;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            border: 1px solid var(--line);
+            display: flex; align-items: center; justify-content: center;
         }
-        .download-btn:hover { background: var(--primary); color: white; transform: scale(1.1); }
+        .preview-large img { width: 100%; height: 100%; object-fit: contain; }
 
-        /* 删除按钮 (右上) */
-        .delete-btn {
-            top: 10px; right: 10px;
-            background: rgba(255,255,255,0.9); color: #999;
-            opacity: 0; transform: scale(0.8);
-        }
-        .delete-btn:hover { background: #ff4757; color: white; }
-        .card:hover .delete-btn { opacity: 1; transform: scale(1); }
+        .meta-group { margin-bottom: 25px; }
+        .meta-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .meta-value { font-size: 14px; font-weight: 500; word-break: break-all; font-family: 'Helvetica Neue', sans-serif; }
+        .meta-value.mono { font-family: 'Courier New', monospace; }
+        .art-title { font-family: 'Helvetica Neue', sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2; margin-bottom: 5px; }
 
+        /* 检查器按钮组 */
+        .action-group { display: flex; gap: 10px; margin-top: auto; padding-top: 20px; border-top: 1px solid var(--line); }
+        .btn-action { flex: 1; padding: 12px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.2s; }
+        
+        .btn-pin { background: var(--surface); border: 1px solid var(--line); color: var(--text-main); }
+        .btn-pin:hover { border-color: #000; }
+        .btn-pin.active { background: var(--text-main); color: #fff; border-color: var(--text-main); }
+        
+        .btn-download { background: var(--surface); border: 1px solid var(--line); color: var(--text-main); }
+        .btn-download:hover { background: #f0f0f0; }
+
+        .btn-delete { background: #fff0f0; border: 1px solid #ffcccc; color: var(--alert); }
+        .btn-delete:hover { background: var(--alert); color: white; border-color: var(--alert); }
+
+        /* 隐藏的上传辅助 */
+        #preview-canvas-container { display: none; }
+        #upload-progress-overlay { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #000; color: white; padding: 10px 20px; border-radius: 30px; font-size: 12px; display: none; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 100; }
     </style>
     
     <script type="importmap">
@@ -95,34 +165,47 @@
     </script>
 </head>
 <body>
-    <div class="container">
-        <div class="upload-section">
-            <h1>🏛️ Batch Asset Uploader</h1>
-            <div class="upload-box" onclick="document.getElementById('fileInput').click()">
-                <div id="preview-canvas-container"></div>
-                <div id="upload-text">
-                    <span style="font-size: 40px;">📦</span><br>
-                    <span id="fileName">Click to Select Multiple .glb Files</span>
+
+    <header>
+        <div class="brand">VOID ARCHIVE <span style="font-weight:400; color:#888;">// MANAGER</span></div>
+        <div class="metrics">
+            <div class="metric-item">
+                <div class="metric-label">Total Assets</div>
+                <div class="metric-value" id="stat-count">0</div>
+            </div>
+            <div class="metric-item" style="width: 150px;">
+                <div class="metric-label">Storage Used (<span id="stat-size-text">0 MB</span> / 5 GB)</div>
+                <div class="progress-track"><div class="progress-fill" id="stat-storage-bar"></div></div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Est. Bandwidth</div>
+                <div class="metric-value" style="color:#aaa;">--</div> 
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="library-panel">
+            <div class="upload-compact" onclick="document.getElementById('fileInput').click()">
+                <div>
+                    <div style="font-weight:600; font-size:14px;">Import Models</div>
+                    <div class="upload-status" id="upload-status">Supports .glb / .gltf (Multi-select)</div>
                 </div>
+                <button class="btn-upload" id="upload-btn">SELECT FILES</button>
                 <input type="file" id="fileInput" accept=".glb, .gltf" multiple style="display: none" onchange="handleFileSelect(this)">
             </div>
-            
-            <div class="progress-container" id="progressBox">
-                <div id="progressLabel">Preparing...</div>
-                <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBar"></div></div>
-                <div class="progress-text"><span id="progressCount">0/0</span><span id="progressPercent">0%</span></div>
+
+            <div class="grid-container" id="gallery-grid">
+                </div>
+        </div>
+
+        <div class="inspector-panel" id="inspector">
+            <div class="inspector-empty">Select an asset to view details</div>
             </div>
+    </main>
 
-            <div id="status">Ready</div>
-            <button class="btn-primary" id="saveBtn" onclick="processBatchUpload()" disabled>Upload All Files</button>
-        </div>
-
-        <div class="gallery-header">
-            <h2>Collection Library</h2>
-            <span id="count-badge" style="background:#eee; padding:5px 10px; border-radius:20px; font-size:12px;">Loading...</span>
-        </div>
-        <div class="grid" id="gallery-grid"></div>
-    </div>
+    <div id="preview-canvas-container"></div>
+    <div id="upload-progress-overlay">Processing 1/5...</div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -132,6 +215,7 @@
         import { getFirestore, collection, addDoc, deleteDoc, doc, query, orderBy, onSnapshot, updateDoc, getDocs, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
+        // === Firebase Config ===
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
             authDomain: "online-white-box.firebaseapp.com",
@@ -147,133 +231,197 @@
         const storage = getStorage(app);
 
         let scene, camera, renderer, loader;
+        let selectedFiles = [];
+        let currentModels = []; // Store fetched data
         
         window.handleFileSelect = handleFileSelect;
-        window.processBatchUpload = processBatchUpload;
-        window.deleteModel = deleteModel;
-        window.togglePin = togglePin;
-        window.downloadModel = downloadModel; // 新增下载函数
-
-        let selectedFiles = [];
         
         initThreeJS();
-        loadGalleryGrid();
+        initDataListener();
 
+        // === 1. 初始化 ThreeJS (用于生成截图) ===
         function initThreeJS() {
             const width = 150, height = 150;
             const container = document.getElementById('preview-canvas-container');
-            
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xf5f5f7);
-            const ambient = new THREE.AmbientLight(0xffffff, 1.5);
-            scene.add(ambient);
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0xf5f5f7);
+            scene.add(new THREE.AmbientLight(0xffffff, 1.5));
             const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
-            dirLight.position.set(5, 10, 7);
-            scene.add(dirLight);
-
+            dirLight.position.set(5, 10, 7); scene.add(dirLight);
             camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
             renderer.setSize(width, height);
             container.appendChild(renderer.domElement);
-
             loader = new GLTFLoader();
             const dracoLoader = new DRACOLoader();
             dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
             loader.setDRACOLoader(dracoLoader);
         }
 
-        function handleFileSelect(input) {
-            if (input.files && input.files.length > 0) {
-                selectedFiles = Array.from(input.files);
-                document.getElementById('fileName').innerText = `${selectedFiles.length} Files Selected`;
-                document.getElementById('status').innerText = "Ready to start batch upload.";
-                document.getElementById('saveBtn').disabled = false;
-                document.getElementById('saveBtn').innerText = `Upload ${selectedFiles.length} Files`;
-                document.getElementById('upload-text').style.display = 'block';
-                document.getElementById('preview-canvas-container').style.display = 'block';
-            }
+        // === 2. 命名生成器 (复制自前端，确保一致) ===
+        function generateSystematicName(seed) {
+            let hash = 0;
+            if (!seed || seed.length === 0) return "NULL · 000 · Ø";
+            for (let i = 0; i < seed.length; i++) { hash = ((hash << 5) - hash) + seed.charCodeAt(i); hash |= 0; }
+            hash = Math.abs(hash);
+            const prefixes = ["OBJ", "ARCH", "SYS", "NODE", "DATA", "CORE", "FLUX", "VOID", "UNIT", "SPEC", "FORM"];
+            const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
+            const pIndex = hash % prefixes.length;
+            const sIndex = (hash >> 3) % symbols.length;
+            const charCode = String.fromCharCode(65 + (hash % 26)); 
+            const num = (hash % 999).toString().padStart(3, '0'); 
+            return `${prefixes[pIndex]} · ${charCode}${num} · ${symbols[sIndex]}`;
         }
 
-        async function processBatchUpload() {
-            if (selectedFiles.length === 0) return;
-            const btn = document.getElementById('saveBtn');
-            const status = document.getElementById('status');
-            const pBox = document.getElementById('progressBox');
-            const pBar = document.getElementById('progressBar');
-            const pLabel = document.getElementById('progressLabel');
-            const pCount = document.getElementById('progressCount');
-            const pPercent = document.getElementById('progressPercent');
+        // === 3. 数据监听与仪表盘 ===
+        function initDataListener() {
+            const q = query(collection(db, "model_library"), orderBy("uploadDate", "desc"));
+            onSnapshot(q, (snapshot) => {
+                const grid = document.getElementById('gallery-grid');
+                grid.innerHTML = '';
+                currentModels = [];
+                let totalBytes = 0;
 
-            btn.disabled = true;
-            pBox.style.display = 'block';
-            document.getElementById('upload-text').style.display = 'none';
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    data.id = doc.id; // Append ID
+                    currentModels.push(data);
+                    
+                    // 计算存储大小 (如果数据里有size字段)
+                    if(data.size) totalBytes += data.size;
 
-            let successCount = 0;
-            let failCount = 0;
+                    const el = document.createElement('div');
+                    el.className = `grid-item ${data.pinned ? 'pinned' : ''}`;
+                    el.onclick = () => renderInspector(data);
+                    
+                    const thumb = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div class="no-thumb">#</div>`;
+                    const dot = data.pinned ? `<div class="status-dot pinned"></div>` : '';
+                    
+                    el.innerHTML = `${thumb}${dot}`;
+                    grid.appendChild(el);
+                });
 
-            for (let i = 0; i < selectedFiles.length; i++) {
-                const file = selectedFiles[i];
-                const currentIndex = i + 1;
-                const total = selectedFiles.length;
+                updateDashboard(currentModels.length, totalBytes);
+            });
+        }
 
-                pLabel.innerText = `Processing: ${file.name}`;
-                pCount.innerText = `${currentIndex}/${total}`;
-                const overallPercent = ((i / total) * 100).toFixed(0);
-                pPercent.innerText = `${overallPercent}%`;
-                pBar.style.width = `${overallPercent}%`;
-                status.innerText = `Analyzing model ${currentIndex} of ${total}...`;
+        function updateDashboard(count, bytes) {
+            document.getElementById('stat-count').innerText = count;
+            
+            // 格式化大小
+            const mb = (bytes / (1024 * 1024)).toFixed(2);
+            document.getElementById('stat-size-text').innerText = `${mb} MB`;
+            
+            // 计算进度 (5GB = 5120MB)
+            const percent = Math.min((mb / 5120) * 100, 100);
+            const bar = document.getElementById('stat-storage-bar');
+            bar.style.width = `${percent}%`;
+            
+            if(percent > 80) bar.className = 'progress-fill warning';
+            if(percent > 95) bar.className = 'progress-fill danger';
+        }
 
+        // === 4. 渲染检查器面板 ===
+        function renderInspector(data) {
+            const panel = document.getElementById('inspector');
+            const sysName = generateSystematicName(data.name);
+            const dateStr = data.uploadDate ? new Date(data.uploadDate.seconds * 1000).toLocaleDateString() : 'Unknown';
+            const sizeStr = data.size ? (data.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown';
+            const thumb = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div style="color:#ccc;">No Preview</div>`;
+            const pinnedLabel = data.pinned ? "UNPIN ASSET" : "PIN TO DISPLAY";
+            const pinnedClass = data.pinned ? "active" : "";
+
+            panel.innerHTML = `
+                <div class="preview-large">${thumb}</div>
+                
+                <div class="meta-group">
+                    <div class="meta-label">Systematic ID</div>
+                    <div class="art-title">${sysName}</div>
+                </div>
+
+                <div class="meta-group">
+                    <div class="meta-label">Original Filename</div>
+                    <div class="meta-value mono">${data.name}</div>
+                </div>
+
+                <div class="meta-group" style="display:flex; gap:20px;">
+                    <div>
+                        <div class="meta-label">File Size</div>
+                        <div class="meta-value mono">${sizeStr}</div>
+                    </div>
+                    <div>
+                        <div class="meta-label">Date Added</div>
+                        <div class="meta-value mono">${dateStr}</div>
+                    </div>
+                </div>
+
+                <div class="meta-group">
+                    <div class="meta-label">Storage Path</div>
+                    <div class="meta-value mono" style="font-size:10px; color:#999;">${data.storagePath}</div>
+                </div>
+
+                <div class="action-group">
+                    <button class="btn-action btn-pin ${pinnedClass}" onclick="togglePin('${data.id}', ${data.pinned})">${pinnedLabel}</button>
+                    <button class="btn-action btn-download" onclick="window.open('${data.url}')">DOWNLOAD</button>
+                    <button class="btn-action btn-delete" onclick="deleteModel('${data.id}', '${data.storagePath}', '${data.thumbPath}')">DELETE</button>
+                </div>
+            `;
+        }
+
+        // === 5. 上传逻辑 (自动队列) ===
+        function handleFileSelect(input) {
+            if (input.files && input.files.length > 0) {
+                const files = Array.from(input.files);
+                processQueue(files);
+            }
+            input.value = '';
+        }
+
+        async function processQueue(files) {
+            const overlay = document.getElementById('upload-progress-overlay');
+            overlay.style.display = 'block';
+            
+            for (let i = 0; i < files.length; i++) {
+                overlay.innerText = `Processing ${i+1}/${files.length}: ${files[i].name}`;
                 try {
-                    const thumbBlob = await generateThumbnailPromise(file);
-                    status.innerText = `Uploading ${file.name}...`;
-                    await uploadSingleFile(file, thumbBlob);
-                    successCount++;
-                } catch (err) {
-                    console.error(`Failed to upload ${file.name}:`, err);
-                    failCount++;
+                    const thumbBlob = await generateThumbnailPromise(files[i]);
+                    await uploadSingleFile(files[i], thumbBlob);
+                } catch (e) {
+                    console.error(e);
                 }
             }
-
-            pBar.style.width = '100%';
-            pPercent.innerText = '100%';
-            status.innerText = `🎉 Done! Success: ${successCount}, Failed: ${failCount}`;
-            btn.innerText = "Upload Complete";
-            setTimeout(() => { resetUI(); }, 3000);
+            
+            overlay.innerText = "All Complete";
+            setTimeout(() => { overlay.style.display = 'none'; }, 2000);
         }
 
         function generateThumbnailPromise(file) {
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
                 const url = URL.createObjectURL(file);
-                const oldModel = scene.children.find(c => c.type === 'Group' || c.type === 'Object3D');
-                if(oldModel) scene.remove(oldModel);
+                // 简易清理
+                scene.children = scene.children.filter(c => c.isLight); // 只保留灯光
                 
                 loader.load(url, (gltf) => {
                     const model = gltf.scene;
                     const box = new THREE.Box3().setFromObject(model);
                     const center = box.getCenter(new THREE.Vector3());
                     const size = box.getSize(new THREE.Vector3());
-
-                    model.position.x = -center.x;
-                    model.position.y = -center.y;
-                    model.position.z = -center.z;
+                    model.position.sub(center); // Center
                     scene.add(model);
 
                     const maxDim = Math.max(size.x, size.y, size.z);
                     const fov = camera.fov * (Math.PI / 180);
-                    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                    cameraZ *= 1.5;
+                    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
                     camera.position.set(0, size.y * 0.2, cameraZ);
                     camera.lookAt(0, 0, 0);
 
                     setTimeout(() => {
                         renderer.render(scene, camera);
                         renderer.domElement.toBlob((blob) => {
-                            scene.remove(model);
                             URL.revokeObjectURL(url);
                             resolve(blob);
                         }, 'image/jpeg', 0.8);
-                    }, 50);
-                }, undefined, (err) => { resolve(null); });
+                    }, 100); // Wait for render
+                }, undefined, () => resolve(null));
             });
         }
 
@@ -296,6 +444,7 @@
                 thumbPath = thumbRef.fullPath;
             }
 
+            // Save file size for analytics
             await addDoc(collection(db, "model_library"), {
                 name: file.name,
                 url: modelUrl,
@@ -303,64 +452,17 @@
                 thumbPath: thumbPath,
                 storagePath: modelRef.fullPath,
                 uploadDate: new Date(),
+                size: file.size, // Save Size!
                 active: true,
                 pinned: false
             });
         }
 
-        function resetUI() {
-            selectedFiles = [];
-            document.getElementById('fileName').innerText = "Click to Select Multiple .glb Files";
-            document.getElementById('progressBox').style.display = 'none';
-            document.getElementById('preview-canvas-container').style.display = 'none';
-            document.getElementById('upload-text').style.display = 'block';
-            document.getElementById('saveBtn').disabled = true;
-            document.getElementById('saveBtn').innerText = "Upload All Files";
-            document.getElementById('status').innerText = "Ready";
-            document.getElementById('fileInput').value = '';
-        }
-
-        function loadGalleryGrid() {
-            const grid = document.getElementById('gallery-grid');
-            const q = query(collection(db, "model_library"), orderBy("uploadDate", "desc"));
-
-            onSnapshot(q, (snapshot) => {
-                grid.innerHTML = '';
-                document.getElementById('count-badge').innerText = `${snapshot.size} items`;
-                snapshot.forEach((docSnap) => {
-                    const data = docSnap.data();
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    
-                    const thumbContent = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div class="no-thumb">🧊</div>`;
-                    const pinClass = data.pinned ? 'active' : '';
-                    const pinTitle = data.pinned ? 'Pinned (Displayed Now)' : 'Pin to Display';
-                    
-                    const dateStr = data.uploadDate ? new Date(data.uploadDate.seconds * 1000).toLocaleDateString() : '';
-
-                    card.innerHTML = `
-                        <div class="pin-badge ${pinClass}" title="${pinTitle}" onclick="togglePin('${docSnap.id}', ${data.pinned})">★</div>
-                        
-                        <button class="btn-circle delete-btn" title="Delete" onclick="deleteModel('${docSnap.id}', '${data.storagePath}', '${data.thumbPath}')">×</button>
-                        
-                        <div class="card-thumb">
-                            ${thumbContent}
-                            <button class="btn-circle download-btn" title="Download Original" onclick="downloadModel('${data.url}')">↓</button>
-                        </div>
-                        
-                        <div class="card-info">
-                            <div class="card-title" title="${data.name}">${data.name}</div>
-                            <div class="card-meta">${dateStr}</div>
-                        </div>
-                    `;
-                    grid.appendChild(card);
-                });
-            });
-        }
-
-        async function togglePin(docId, currentStatus) {
+        // === 6. 功能函数 (Exposed to Window) ===
+        window.togglePin = async (docId, currentStatus) => {
             const batch = writeBatch(db);
             if (!currentStatus) {
+                // Pin logic: Unpin others first
                 const pinnedQ = query(collection(db, "model_library"), where("pinned", "==", true));
                 const pinnedDocs = await getDocs(pinnedQ);
                 pinnedDocs.forEach(doc => { batch.update(doc.ref, { pinned: false }); });
@@ -369,21 +471,20 @@
                 batch.update(doc(db, "model_library", docId), { pinned: false });
             }
             await batch.commit();
-        }
+            // Refresh Inspector UI if needed? OnSnapshot will handle list, but Inspector might need manual update or re-select.
+            // Simplified: Just allow OnSnapshot to update the grid dots.
+        };
 
-        // === 新增：下载功能 ===
-        function downloadModel(url) {
-            window.open(url, '_blank');
-        }
-
-        async function deleteModel(docId, storagePath, thumbPath) {
-            if (!confirm("Delete this model?")) return;
+        window.deleteModel = async (docId, storagePath, thumbPath) => {
+            if (!confirm("Permanently delete this asset?")) return;
             try {
                 await deleteDoc(doc(db, "model_library", docId));
                 if (storagePath) await deleteObject(ref(storage, storagePath)).catch(e=>{});
-                if (thumbPath) await deleteObject(ref(storage, thumbPath)).catch(e=>{});
+                if (thumbPath && thumbPath !== 'undefined') await deleteObject(ref(storage, thumbPath)).catch(e=>{});
+                // Clear inspector
+                document.getElementById('inspector').innerHTML = '<div class="inspector-empty">Select an asset to view details</div>';
             } catch (e) { alert(e.message); }
-        }
+        };
     </script>
 </body>
 </html>
