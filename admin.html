@@ -26,7 +26,6 @@
             flex-direction: column;
         }
 
-        /* 顶部仪表盘 */
         header {
             background: var(--surface); border-bottom: 1px solid var(--line);
             padding: 0 30px; height: 70px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
@@ -41,10 +40,7 @@
         .progress-fill.warning { background: #ffcc00; }
         .progress-fill.danger { background: var(--alert); }
 
-        /* 主体布局 */
         main { display: flex; flex: 1; overflow: hidden; }
-
-        /* 左侧：库 */
         .library-panel { flex: 1; padding: 30px; overflow-y: auto; border-right: 1px solid var(--line); }
 
         .upload-compact {
@@ -56,7 +52,6 @@
         .btn-upload { background: var(--accent); color: #fff; border: none; padding: 8px 20px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
         .btn-upload:disabled { background: #ccc; cursor: not-allowed; }
 
-        /* 网格 */
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; }
         .grid-item {
             background: var(--surface); border: 2px solid transparent; aspect-ratio: 1; border-radius: 4px; overflow: hidden;
@@ -64,8 +59,6 @@
         }
         .grid-item:hover { border-color: #999; }
         .grid-item.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-        
-        /* === 修改点 2: 显眼的置顶样式 === */
         .grid-item.pinned { border-color: var(--accent); border-width: 4px; }
         .pinned-badge {
             position: absolute; top: 0; left: 0; background: var(--accent); color: white;
@@ -73,11 +66,9 @@
             display: none; z-index: 2;
         }
         .grid-item.pinned .pinned-badge { display: block; }
-
         .grid-item img { width: 100%; height: 100%; object-fit: cover; }
         .grid-item .no-thumb { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #ccc; font-size: 24px; }
 
-        /* 右侧：检查器 */
         .inspector-panel { width: 380px; background: var(--surface); padding: 30px; overflow-y: auto; display: flex; flex-direction: column; flex-shrink: 0; border-left: 1px solid var(--line); }
         .inspector-empty { color: var(--text-dim); font-size: 14px; text-align: center; margin-top: 100px; }
         
@@ -91,22 +82,16 @@
         .meta-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
         .meta-value { font-size: 14px; font-weight: 500; word-break: break-all; font-family: 'Helvetica Neue', sans-serif; }
         .meta-value.mono { font-family: 'Courier New', monospace; font-size: 13px; }
-        
-        /* 链接样式 */
         .storage-link { color: #0066cc; text-decoration: none; border-bottom: 1px solid transparent; transition: border 0.2s; cursor: pointer; }
         .storage-link:hover { border-bottom-color: #0066cc; }
-
         .art-title { font-family: 'Helvetica Neue', sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2; margin-bottom: 5px; }
 
         .action-group { display: flex; gap: 10px; margin-top: auto; padding-top: 20px; border-top: 1px solid var(--line); }
         .btn-action { flex: 1; padding: 12px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; text-align: center; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
-        
-        /* === 修改点 1: 实时响应的按钮状态 === */
         .btn-pin { background: var(--surface); border: 1px solid var(--line); color: var(--text-main); }
         .btn-pin:hover { border-color: #000; }
         .btn-pin.is-pinned { background: var(--text-main); color: #fff; border-color: var(--text-main); }
         .btn-pin.is-pinned:hover { background: #333; border-color: #333; }
-        
         .btn-download { background: var(--surface); border: 1px solid var(--line); color: var(--text-main); }
         .btn-download:hover { background: #f0f0f0; }
         .btn-delete { background: #fff0f0; border: 1px solid #ffcccc; color: var(--alert); }
@@ -151,10 +136,8 @@
                 <button class="btn-upload" id="upload-btn">SELECT FILES</button>
                 <input type="file" id="fileInput" accept=".glb, .gltf" multiple style="display: none" onchange="handleFileSelect(this)">
             </div>
-
             <div class="grid-container" id="gallery-grid"></div>
         </div>
-
         <div class="inspector-panel" id="inspector">
             <div class="inspector-empty">Select an asset to view details</div>
         </div>
@@ -171,7 +154,6 @@
         import { getFirestore, collection, addDoc, deleteDoc, doc, query, orderBy, onSnapshot, updateDoc, getDocs, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
-        // === Firebase Config ===
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
             authDomain: "online-white-box.firebaseapp.com",
@@ -188,7 +170,7 @@
 
         let scene, camera, renderer, loader;
         let currentModels = [];
-        let selectedModelId = null; // Track selection
+        let selectedModelId = null;
         
         window.handleFileSelect = handleFileSelect;
         
@@ -212,18 +194,37 @@
             loader.setDRACOLoader(dracoLoader);
         }
 
+        // === 修改点：纯随机代码命名 ===
         function generateSystematicName(seed) {
             let hash = 0;
             if (!seed || seed.length === 0) return "NULL · 000 · Ø";
             for (let i = 0; i < seed.length; i++) { hash = ((hash << 5) - hash) + seed.charCodeAt(i); hash |= 0; }
             hash = Math.abs(hash);
-            const prefixes = ["OBJ", "ARCH", "SYS", "NODE", "DATA", "CORE", "FLUX", "VOID", "UNIT", "SPEC", "FORM"];
+            
+            // 伪随机数生成器 (基于hash)
+            const rng = (s) => {
+                let t = s + 0x6D2B79F5;
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            }
+            const rand = rng(hash);
+
+            // 生成4个随机大写字母
+            let prefix = "";
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            for (let i = 0; i < 4; i++) {
+                // 为了保证同一文件生成相同字母，我们需要不断迭代hash或者用更好的PRNG
+                // 这里简单利用 hash 的不同位
+                const charIndex = Math.floor(rng(hash + i) * letters.length);
+                prefix += letters.charAt(charIndex);
+            }
+
+            const num = Math.floor(rng(hash + 99) * 1000).toString().padStart(3, '0'); 
             const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
-            const pIndex = hash % prefixes.length;
-            const sIndex = (hash >> 3) % symbols.length;
-            const charCode = String.fromCharCode(65 + (hash % 26)); 
-            const num = (hash % 999).toString().padStart(3, '0'); 
-            return `${prefixes[pIndex]} · ${charCode}${num} · ${symbols[sIndex]}`;
+            const sIndex = Math.floor(rng(hash + 77) * symbols.length);
+
+            return `${prefix} · ${num} · ${symbols[sIndex]}`;
         }
 
         function initDataListener() {
@@ -238,33 +239,22 @@
                     const data = doc.data();
                     data.id = doc.id;
                     currentModels.push(data);
-                    
-                    // 修正大小计算：如果是旧数据没有size，视为0
                     if(data.size) totalBytes += data.size;
 
                     const el = document.createElement('div');
                     el.className = `grid-item ${data.pinned ? 'pinned' : ''} ${data.id === selectedModelId ? 'selected' : ''}`;
                     el.onclick = () => selectModel(data.id);
-                    
                     const thumb = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div class="no-thumb">#</div>`;
-                    
-                    // 显眼的 PINNED 标签
                     const pinBadge = `<div class="pinned-badge">PINNED</div>`;
-                    
                     el.innerHTML = `${pinBadge}${thumb}`;
                     grid.appendChild(el);
                 });
 
                 updateDashboard(currentModels.length, totalBytes);
-                
-                // === 修复点 1: 自动刷新检查器 ===
-                // 如果当前正在查看某个模型，数据更新后（例如Pin状态改变），立即重绘检查器
                 if (selectedModelId) {
                     const updatedModel = currentModels.find(m => m.id === selectedModelId);
-                    if (updatedModel) {
-                        renderInspector(updatedModel);
-                    } else {
-                        // 如果被删了
+                    if (updatedModel) renderInspector(updatedModel);
+                    else {
                         document.getElementById('inspector').innerHTML = '<div class="inspector-empty">Asset deleted</div>';
                         selectedModelId = null;
                     }
@@ -285,12 +275,7 @@
 
         function selectModel(id) {
             selectedModelId = id;
-            // 更新 Grid 选中状态
             document.querySelectorAll('.grid-item').forEach(el => el.classList.remove('selected'));
-            // 这里简单处理，onSnapshot 会负责完全重绘，
-            // 但为了点击瞬间的反馈，我们也可以手动加 class，不过上面的 initDataListener 很快就会覆盖它。
-            // 只要数据更新够快，UI 就会同步。
-            
             const model = currentModels.find(m => m.id === id);
             if (model) renderInspector(model);
         }
@@ -299,48 +284,23 @@
             const panel = document.getElementById('inspector');
             const sysName = generateSystematicName(data.name);
             const dateStr = data.uploadDate ? new Date(data.uploadDate.seconds * 1000).toLocaleDateString() : 'Unknown';
-            // 修复文件大小显示
-            const sizeStr = data.size ? (data.size / 1024 / 1024).toFixed(2) + ' MB' : 'Legacy Asset (N/A)';
+            const sizeStr = data.size ? (data.size / 1024 / 1024).toFixed(2) + ' MB' : 'Legacy (N/A)';
             const thumb = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div style="color:#ccc;">No Preview</div>`;
             
-            // Pin 按钮状态
             const pinnedLabel = data.pinned ? "UNDO PIN" : "PIN TO DISPLAY";
             const pinnedClass = data.pinned ? "is-pinned" : "";
-
-            // === 修改点 5: 生成 Firebase Console 跳转链接 ===
-            // 这里的 URL 格式基于标准 Firebase 路径规则
             const encodedPath = encodeURIComponent(data.storagePath);
             const consoleUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/storage/${firebaseConfig.storageBucket}/files/~2F${encodedPath}`;
 
             panel.innerHTML = `
                 <div class="preview-large">${thumb}</div>
-                
-                <div class="meta-group">
-                    <div class="meta-label">Systematic ID</div>
-                    <div class="art-title">${sysName}</div>
-                </div>
-
-                <div class="meta-group">
-                    <div class="meta-label">Original Filename</div>
-                    <div class="meta-value mono">${data.name}</div>
-                </div>
-
+                <div class="meta-group"><div class="meta-label">Systematic ID</div><div class="art-title">${sysName}</div></div>
+                <div class="meta-group"><div class="meta-label">Original Filename</div><div class="meta-value mono">${data.name}</div></div>
                 <div class="meta-group" style="display:flex; gap:20px;">
-                    <div>
-                        <div class="meta-label">File Size</div>
-                        <div class="meta-value mono">${sizeStr}</div>
-                    </div>
-                    <div>
-                        <div class="meta-label">Date Added</div>
-                        <div class="meta-value mono">${dateStr}</div>
-                    </div>
+                    <div><div class="meta-label">File Size</div><div class="meta-value mono">${sizeStr}</div></div>
+                    <div><div class="meta-label">Date Added</div><div class="meta-value mono">${dateStr}</div></div>
                 </div>
-
-                <div class="meta-group">
-                    <div class="meta-label">Storage Path (Click to Open)</div>
-                    <a href="${consoleUrl}" target="_blank" class="meta-value mono storage-link">${data.storagePath}</a>
-                </div>
-
+                <div class="meta-group"><div class="meta-label">Storage Path (Click to Open)</div><a href="${consoleUrl}" target="_blank" class="meta-value mono storage-link">${data.storagePath}</a></div>
                 <div class="action-group">
                     <button class="btn-action btn-pin ${pinnedClass}" onclick="togglePin('${data.id}', ${data.pinned})">${pinnedLabel}</button>
                     <button class="btn-action btn-download" onclick="window.open('${data.url}')">DOWNLOAD</button>
@@ -350,10 +310,7 @@
         }
 
         function handleFileSelect(input) {
-            if (input.files && input.files.length > 0) {
-                const files = Array.from(input.files);
-                processQueue(files);
-            }
+            if (input.files && input.files.length > 0) { const files = Array.from(input.files); processQueue(files); }
             input.value = '';
         }
 
@@ -380,19 +337,14 @@
                     const box = new THREE.Box3().setFromObject(model);
                     const center = box.getCenter(new THREE.Vector3());
                     const size = box.getSize(new THREE.Vector3());
-                    model.position.sub(center); 
-                    scene.add(model);
+                    model.position.sub(center); scene.add(model);
                     const maxDim = Math.max(size.x, size.y, size.z);
                     const fov = camera.fov * (Math.PI / 180);
                     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
-                    camera.position.set(0, size.y * 0.2, cameraZ);
-                    camera.lookAt(0, 0, 0);
+                    camera.position.set(0, size.y * 0.2, cameraZ); camera.lookAt(0, 0, 0);
                     setTimeout(() => {
                         renderer.render(scene, camera);
-                        renderer.domElement.toBlob((blob) => {
-                            URL.revokeObjectURL(url);
-                            resolve(blob);
-                        }, 'image/jpeg', 0.8);
+                        renderer.domElement.toBlob((blob) => { URL.revokeObjectURL(url); resolve(blob); }, 'image/jpeg', 0.8);
                     }, 100); 
                 }, undefined, () => resolve(null));
             });
@@ -403,34 +355,22 @@
             const randomId = Math.floor(Math.random() * 1000); 
             const modelName = `${timestamp}_${randomId}_${file.name}`;
             const thumbName = `${timestamp}_${randomId}_thumb.jpg`;
-
             const modelRef = ref(storage, 'library/' + modelName);
             const modelSnapshot = await uploadBytesResumable(modelRef, file);
             const modelUrl = await getDownloadURL(modelSnapshot.ref);
-
-            let thumbUrl = null;
-            let thumbPath = null;
+            let thumbUrl = null; let thumbPath = null;
             if (thumbBlob) {
                 const thumbRef = ref(storage, 'library_thumbs/' + thumbName);
                 const thumbSnapshot = await uploadBytesResumable(thumbRef, thumbBlob);
                 thumbUrl = await getDownloadURL(thumbSnapshot.ref);
                 thumbPath = thumbRef.fullPath;
             }
-
             await addDoc(collection(db, "model_library"), {
-                name: file.name,
-                url: modelUrl,
-                thumbnailUrl: thumbUrl,
-                thumbPath: thumbPath,
-                storagePath: modelRef.fullPath,
-                uploadDate: new Date(),
-                size: file.size, // 保存文件大小
-                active: true,
-                pinned: false
+                name: file.name, url: modelUrl, thumbnailUrl: thumbUrl, thumbPath: thumbPath,
+                storagePath: modelRef.fullPath, uploadDate: new Date(), size: file.size, active: true, pinned: false
             });
         }
 
-        // === Exposed Functions ===
         window.togglePin = async (docId, currentStatus) => {
             const batch = writeBatch(db);
             if (!currentStatus) {
@@ -442,7 +382,6 @@
                 batch.update(doc(db, "model_library", docId), { pinned: false });
             }
             await batch.commit();
-            // selectedModelId 保持不变，onSnapshot 会触发 renderInspector 并更新按钮文字
         };
 
         window.deleteModel = async (docId, storagePath, thumbPath) => {
@@ -451,6 +390,7 @@
                 await deleteDoc(doc(db, "model_library", docId));
                 if (storagePath) await deleteObject(ref(storage, storagePath)).catch(e=>{});
                 if (thumbPath && thumbPath !== 'undefined') await deleteObject(ref(storage, thumbPath)).catch(e=>{});
+                document.getElementById('inspector').innerHTML = '<div class="inspector-empty">Select an asset to view details</div>';
             } catch (e) { alert(e.message); }
         };
     </script>
