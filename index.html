@@ -40,26 +40,17 @@
             width: 160px; height: 160px; 
             z-index: 1500; display: none;
         }
-        .joystick-base {
-            width: 100%; height: 100%;
-            background: transparent;
-            border: none;
-            position: relative;
-        }
+        .joystick-base { width: 100%; height: 100%; background: transparent; border: none; position: relative; }
         .joystick-knob {
             width: 40px; height: 40px; 
             background: rgba(0, 0, 0, 0.2); 
             border-radius: 50%;
-            position: absolute;
-            top: 50%; left: 50%;
+            position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             pointer-events: none;
             transition: transform 0.1s;
         }
-        .joystick-active .joystick-knob {
-            background: rgba(0, 0, 0, 0.4);
-            transform: translate(-50%, -50%) scale(1.1);
-        }
+        .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
 
         @media (max-width: 768px) {
             #instruction { display: none; }
@@ -78,18 +69,10 @@
     </script>
 </head>
 <body>
-    <div id="intro-overlay">
-        <div id="loading-msg">ENTERING...</div>
-    </div>
-    
+    <div id="intro-overlay"><div id="loading-msg">ENTERING...</div></div>
     <div id="click-capture"></div>
     <div id="instruction">Click to Start | WASD to Move</div>
-
-    <div id="joystick-zone">
-        <div class="joystick-base">
-            <div class="joystick-knob" id="joystick-knob"></div>
-        </div>
-    </div>
+    <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -132,10 +115,8 @@
 
         let joystickVector = { x: 0, y: 0 }; 
         let lookTouchId = null;
-        let lastLookX = 0;
-        let lastLookY = 0;
-        let lastTapTime = 0; 
-        let lastTapPos = { x: 0, y: 0 };
+        let lastLookX = 0; let lastLookY = 0;
+        let lastTapTime = 0; let lastTapPos = { x: 0, y: 0 };
 
         init();
         animate();
@@ -145,22 +126,14 @@
             scene.background = new THREE.Color(0xffffff);
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.7, 4); 
-            
             camera.rotation.order = 'YXZ'; 
 
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); hemiLight.position.set(0, 20, 0); scene.add(hemiLight);
-            
             const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); 
-            keyLight.position.set(0, 15, 0); 
-            keyLight.castShadow = true;
-            keyLight.shadow.mapSize.set(2048, 2048); 
-            keyLight.shadow.bias = -0.0001; 
-            keyLight.shadow.radius = 10; 
-            const d = 15; 
-            keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; 
-            keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
+            keyLight.position.set(0, 15, 0); keyLight.castShadow = true;
+            keyLight.shadow.mapSize.set(2048, 2048); keyLight.shadow.bias = -0.0001; keyLight.shadow.radius = 10; 
+            const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
             scene.add(keyLight);
-
             const fillLight = new THREE.DirectionalLight(0xffeedd, 1.5); fillLight.position.set(-8, 5, 8); scene.add(fillLight);
             const topLight = new THREE.DirectionalLight(0xffffff, 0.8); topLight.position.set(0, 10, -6); scene.add(topLight);
 
@@ -183,28 +156,54 @@
 
             controls = new PointerLockControls(camera, document.body);
             
-            setupControlsEvents(); 
-            setupKeyControls(); 
-            setupTouchControls(); 
-            setupDoubleClickReset(); 
-            
+            setupControlsEvents(); setupKeyControls(); setupTouchControls(); setupDoubleClickReset(); 
             window.addEventListener('resize', onWindowResize);
 
-            if(db) loadRandomModel(); 
+            if(db) checkPinAndLoad(); 
             else loadDefaultSculpture();
         }
 
-        async function loadRandomModel() {
+        // === 修改 2 & 3: 优先检查置顶，否则去重随机 ===
+        async function checkPinAndLoad() {
             try {
+                // 1. 先查有没有置顶的
+                const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
+                const pinSnapshot = await getDocs(pinQuery);
+
+                if (!pinSnapshot.empty) {
+                    // 有置顶，直接加载第一个
+                    const pinDoc = pinSnapshot.docs[0].data();
+                    console.log("Loading pinned model:", pinDoc.name);
+                    loadModelFromUrl(pinDoc.url, pinDoc.name, pinDoc.name); // Pass original name for ID check? No, name is fine
+                    return;
+                }
+
+                // 2. 没有置顶，走随机逻辑
                 const q = query(collection(db, "model_library"), where("active", "==", true));
                 const querySnapshot = await getDocs(q);
-                const models = [];
-                querySnapshot.forEach((doc) => models.push(doc.data()));
+                let models = [];
+                querySnapshot.forEach((doc) => {
+                    // 我们把 Doc ID 也存进去，用于去重
+                    models.push({ id: doc.id, ...doc.data() });
+                });
 
                 if (models.length === 0) { loadDefaultSculpture(); return; }
-                
+
+                // 3. 去重逻辑
+                const lastModelId = localStorage.getItem('last_model_id');
+                // 如果模型库大于1个，则过滤掉上次那个
+                if (models.length > 1 && lastModelId) {
+                    models = models.filter(m => m.id !== lastModelId);
+                }
+
                 const index = Math.floor(Math.random() * models.length);
-                loadModelFromUrl(models[index].url, models[index].name);
+                const selected = models[index];
+                
+                // 记录这次的 ID
+                localStorage.setItem('last_model_id', selected.id);
+                
+                console.log(`Loading random model: ${selected.name}`);
+                loadModelFromUrl(selected.url, selected.name);
 
             } catch (error) { console.error(error); loadDefaultSculpture(); }
         }
@@ -241,21 +240,17 @@
                 hash |= 0; 
             }
             hash = Math.abs(hash);
-
             const prefixes = ["OBJ", "ARCH", "SYS", "NODE", "DATA", "CORE", "FLUX", "VOID", "UNIT", "SPEC", "FORM"];
             const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
-
             const pIndex = hash % prefixes.length;
             const sIndex = (hash >> 3) % symbols.length;
             const charCode = String.fromCharCode(65 + (hash % 26)); 
             const num = (hash % 999).toString().padStart(3, '0'); 
-
             return `${prefixes[pIndex]} · ${charCode}${num} · ${symbols[sIndex]}`;
         }
 
         function createMuseumLabel(modelName, sizeInfo) {
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; }
-
             const systematicName = generateSystematicName(modelName);
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
@@ -267,38 +262,12 @@
             
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 512, 512);
             ctx.textAlign = 'left';
-            
-            // === 修改：字体颜色全面加深 ===
-            
-            // 标题 (纯黑)
-            ctx.font = 'bold 50px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 40, 80);
-
-            // 年份 (纯黑)
-            ctx.font = '36px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; 
-            ctx.fillText(mockYear, 40, 140);
-
-            // 材质 (纯黑)
-            ctx.font = '30px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; 
-            ctx.fillText(randMat, 40, 260);
-
-            // 尺寸 (纯黑)
-            ctx.font = '24px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; 
-            ctx.fillText(sizeInfo, 40, 310);
-            
-            // Credit (深灰)
-            ctx.font = '20px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; 
-            ctx.fillText("Courtesy of the Digital Archive", 40, 460);
-
-            // 边框 (加深)
-            ctx.strokeStyle = '#999999'; 
-            ctx.lineWidth = 10; 
-            ctx.strokeRect(0, 0, 512, 512);
+            ctx.font = 'bold 50px Helvetica, Arial'; ctx.fillStyle = '#1a1a1a'; ctx.fillText(systematicName, 40, 80);
+            ctx.font = '36px Helvetica, Arial'; ctx.fillStyle = '#333333'; ctx.fillText(mockYear, 40, 140);
+            ctx.font = '30px Helvetica, Arial'; ctx.fillStyle = '#333333'; ctx.fillText(randMat, 40, 260);
+            ctx.font = '24px Helvetica, Arial'; ctx.fillStyle = '#333333'; ctx.fillText(sizeInfo, 40, 310);
+            ctx.font = '20px Helvetica, Arial'; ctx.fillStyle = '#555555'; ctx.fillText("Courtesy of the Digital Archive", 40, 460);
+            ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 10; ctx.strokeRect(0, 0, 512, 512);
 
             const texture = new THREE.CanvasTexture(canvas);
             const labelGeo = new THREE.BoxGeometry(0.3, 0.015, 0.3); 
@@ -308,7 +277,8 @@
             return mesh;
         }
 
-        function getSolidHeight(model) {
+        // === 修改 1: 修复虚高检测算法 ===
+        function getSolidHeight(model, boxHeight) {
             const yCoords = [];
             model.traverse((child) => {
                 if (child.isMesh && child.geometry) {
@@ -321,19 +291,19 @@
                     }
                 }
             });
-            if (yCoords.length === 0) return 1.0; 
+            if (yCoords.length === 0) return boxHeight; 
             yCoords.sort((a, b) => a - b);
             const trimStart = Math.floor(yCoords.length * 0.02); 
             const trimEnd = Math.floor(yCoords.length * 0.98);
             const minY = yCoords[trimStart] || yCoords[0];
             const maxY = yCoords[trimEnd] || yCoords[yCoords.length - 1];
-            let height = maxY - minY;
-            if (height < 0.1) {
-                const box = new THREE.Box3().setFromObject(model);
-                const size = box.getSize(new THREE.Vector3());
-                height = size.y;
+            let solidH = maxY - minY;
+            
+            // 安全锁：如果计算出的实心高度太小（比如只有包围盒的20%），则认为算法失效，回退到包围盒高度
+            if (solidH < boxHeight * 0.2) {
+                return boxHeight;
             }
-            return height;
+            return solidH;
         }
 
         function processAndPlaceModel(rawModel, rawName) {
@@ -355,7 +325,12 @@
             rawModel.rotation.set(0,0,0);
             rawModel.updateMatrixWorld(true);
 
-            const solidHeight = getSolidHeight(rawModel);
+            // 先算 Box
+            const initialBox = new THREE.Box3().setFromObject(rawModel);
+            const initialSize = initialBox.getSize(new THREE.Vector3());
+
+            // 传入 Box Height 作为参考
+            const solidHeight = getSolidHeight(rawModel, initialSize.y);
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
             
@@ -387,16 +362,13 @@
             scene.add(labelMesh);
 
             colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.1; 
-            
             isModelLoaded = true;
         }
 
         function revealScene() {
             setTimeout(() => {
                 gsap.to(introOverlayDiv, { 
-                    opacity: 0, 
-                    duration: 2.0, 
-                    ease: "power2.inOut", 
+                    opacity: 0, duration: 2.0, ease: "power2.inOut", 
                     onComplete: () => { 
                         introOverlayDiv.style.display = 'none'; 
                         clickCaptureDiv.style.display = 'block'; 
@@ -412,28 +384,18 @@
              const tempCam = camera.clone();
              tempCam.position.set(0, 1.7, 4);
              tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
-             gsap.to(camera.quaternion, { 
-                 x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, 
-                 duration: duration, ease: ease 
-             });
+             gsap.to(camera.quaternion, { x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, duration: duration, ease: ease });
         }
 
         function setupDoubleClickReset() {
             window.addEventListener('dblclick', () => { resetCamera(0.15, "expo.out"); });
-            
             document.addEventListener('touchstart', (e) => {
                 const currentTime = new Date().getTime();
                 const tapLength = currentTime - lastTapTime;
                 const touch = e.changedTouches[0];
                 const dist = Math.sqrt(Math.pow(touch.clientX - lastTapPos.x, 2) + Math.pow(touch.clientY - lastTapPos.y, 2));
-
-                if (tapLength < 250 && tapLength > 0 && dist < 30) { 
-                    e.preventDefault(); 
-                    resetCamera(0.5, "power2.inOut");
-                } else {
-                    lastTapPos = { x: touch.clientX, y: touch.clientY };
-                    lastTapTime = currentTime;
-                }
+                if (tapLength < 250 && tapLength > 0 && dist < 30) { e.preventDefault(); resetCamera(0.5, "power2.inOut"); } 
+                else { lastTapPos = { x: touch.clientX, y: touch.clientY }; lastTapTime = currentTime; }
             }, { passive: false });
         }
 
@@ -443,7 +405,6 @@
             const zoneRect = joystickZone.getBoundingClientRect();
             const center = { x: zoneRect.width / 2, y: zoneRect.height / 2 };
             const maxRadius = (zoneRect.width / 2) - 20;
-
             let joystickTouchId = null;
 
             joystickZone.addEventListener('touchstart', (e) => {
@@ -482,75 +443,39 @@
                 const rect = joystickZone.getBoundingClientRect();
                 const x = touch.clientX - rect.left;
                 const y = touch.clientY - rect.top;
-                
-                let dx = x - center.x;
-                let dy = y - center.y;
+                let dx = x - center.x; let dy = y - center.y;
                 const distance = Math.sqrt(dx*dx + dy*dy);
-                
-                if (distance > maxRadius) {
-                    const angle = Math.atan2(dy, dx);
-                    dx = Math.cos(angle) * maxRadius;
-                    dy = Math.sin(angle) * maxRadius;
-                }
-
-                joystickKnob.style.left = (center.x + dx) + 'px';
-                joystickKnob.style.top = (center.y + dy) + 'px';
-
-                joystickVector.x = dx / maxRadius; 
-                joystickVector.y = dy / maxRadius; 
+                if (distance > maxRadius) { const angle = Math.atan2(dy, dx); dx = Math.cos(angle) * maxRadius; dy = Math.sin(angle) * maxRadius; }
+                joystickKnob.style.left = (center.x + dx) + 'px'; joystickKnob.style.top = (center.y + dy) + 'px';
+                joystickVector.x = dx / maxRadius; joystickVector.y = dy / maxRadius; 
             }
 
             document.addEventListener('touchstart', (e) => {
                 if (e.target.closest('#joystick-zone')) return;
                 const touch = e.changedTouches[0];
                 lookTouchId = touch.identifier;
-                lastLookX = touch.clientX;
-                lastLookY = touch.clientY;
+                lastLookX = touch.clientX; lastLookY = touch.clientY;
             }, {passive: false});
 
             document.addEventListener('touchmove', (e) => {
                 let touch = null;
-                for(let i=0; i<e.changedTouches.length; i++) {
-                    if(e.changedTouches[i].identifier === lookTouchId) {
-                        touch = e.changedTouches[i];
-                        break;
-                    }
-                }
+                for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { touch = e.changedTouches[i]; break; } }
                 if (!touch) return;
-                
-                const deltaX = touch.clientX - lastLookX;
-                const deltaY = touch.clientY - lastLookY;
-
-                lastLookX = touch.clientX;
-                lastLookY = touch.clientY;
-
+                const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
+                lastLookX = touch.clientX; lastLookY = touch.clientY;
                 const sensitivity = 0.01; 
-                
                 camera.rotation.y -= deltaX * sensitivity; 
                 camera.rotation.x -= deltaY * sensitivity; 
-                
                 camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
-                
             }, {passive: false});
 
-            document.addEventListener('touchend', (e) => {
-                for(let i=0; i<e.changedTouches.length; i++) {
-                    if(e.changedTouches[i].identifier === lookTouchId) {
-                        lookTouchId = null;
-                        break;
-                    }
-                }
-            });
+            document.addEventListener('touchend', (e) => { for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { lookTouchId = null; break; } } });
         }
 
         function setupControlsEvents() { 
             controls.addEventListener('lock', () => { clickCaptureDiv.style.display = 'none'; instructionText.style.opacity = '0'; }); 
             controls.addEventListener('unlock', () => { if (isModelLoaded) { clickCaptureDiv.style.display = 'block'; instructionText.style.opacity = '1'; } }); 
-            if (!('ontouchstart' in window)) {
-                clickCaptureDiv.addEventListener('click', () => controls.lock());
-            } else {
-                clickCaptureDiv.style.display = 'none'; 
-            }
+            if (!('ontouchstart' in window)) { clickCaptureDiv.addEventListener('click', () => controls.lock()); } else { clickCaptureDiv.style.display = 'none'; }
         }
         
         function setupKeyControls() { const onKeyDown = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = true; break; case 'ArrowLeft': case 'KeyA': moveLeft = true; break; case 'ArrowDown': case 'KeyS': moveBackward = true; break; case 'ArrowRight': case 'KeyD': moveRight = true; break; } }; const onKeyUp = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = false; break; case 'ArrowLeft': case 'KeyA': moveLeft = false; break; case 'ArrowDown': case 'KeyS': moveBackward = false; break; case 'ArrowRight': case 'KeyD': moveRight = false; break; } }; document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp); }
@@ -561,39 +486,13 @@
             requestAnimationFrame(animate); 
             const time = performance.now(); 
             const delta = (time - prevTime) / 1000;
-            
-            velocity.x -= velocity.x * 10.0 * delta; 
-            velocity.z -= velocity.z * 10.0 * delta; 
-            
-            direction.z = Number(moveForward) - Number(moveBackward); 
-            direction.x = Number(moveRight) - Number(moveLeft); 
-            direction.normalize(); 
-
-            if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; 
-            if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
-            
-            if (joystickVector.x !== 0 || joystickVector.y !== 0) {
-                 velocity.z -= -joystickVector.y * 80.0 * delta; 
-                 velocity.x -= joystickVector.x * 80.0 * delta;
-            }
-
-            if (controls.isLocked) {
-                controls.moveRight(-velocity.x * delta); 
-                controls.moveForward(-velocity.z * delta); 
-            } else {
-                const camDir = new THREE.Vector3();
-                camera.getWorldDirection(camDir);
-                camDir.y = 0; camDir.normalize();
-                const camRight = new THREE.Vector3();
-                camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); 
-                
-                camera.position.addScaledVector(camDir, -velocity.z * delta);
-                camera.position.addScaledVector(camRight, -velocity.x * delta);
-            }
-
-            checkCollision(); 
-            prevTime = time; 
-            renderer.render(scene, camera); 
+            velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; 
+            direction.z = Number(moveForward) - Number(moveBackward); direction.x = Number(moveRight) - Number(moveLeft); direction.normalize(); 
+            if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
+            if (joystickVector.x !== 0 || joystickVector.y !== 0) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
+            if (controls.isLocked) { controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); } 
+            else { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize(); const camRight = new THREE.Vector3(); camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); camera.position.addScaledVector(camDir, -velocity.z * delta); camera.position.addScaledVector(camRight, -velocity.x * delta); }
+            checkCollision(); prevTime = time; renderer.render(scene, camera); 
         }
     </script>
 </body>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gallery Batch Uploader</title>
+    <title>Gallery Asset Manager</title>
     <style>
         :root { --primary: #000; --bg: #f5f5f7; --card-bg: #fff; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); margin: 0; padding: 40px; color: #333; }
@@ -12,7 +12,6 @@
         .upload-box { border: 2px dashed #ddd; border-radius: 12px; padding: 40px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; }
         .upload-box:hover { border-color: #999; background: #fafafa; }
         
-        /* 预览画布容器 */
         #preview-canvas-container { width: 150px; height: 150px; border-radius: 8px; overflow: hidden; background: #eee; margin-bottom: 15px; display: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         
         button.btn-primary { background: var(--primary); color: white; border: none; padding: 12px 30px; border-radius: 30px; font-size: 16px; cursor: pointer; margin-top: 20px; transition: transform 0.2s; }
@@ -32,8 +31,25 @@
         .no-thumb { font-size: 40px; color: #ddd; }
         .card-info { padding: 15px; }
         .card-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .delete-btn { position: absolute; top: 10px; right: 10px; background: rgba(255,0,0,0.8); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
+        
+        /* 按钮样式 */
+        .delete-btn { position: absolute; top: 10px; right: 10px; background: rgba(255,0,0,0.8); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; z-index: 2; }
         .card:hover .delete-btn { opacity: 1; }
+
+        /* 置顶按钮 */
+        .pin-btn { 
+            position: absolute; top: 10px; left: 10px; 
+            background: rgba(255,255,255,0.9); 
+            color: #ccc; 
+            border: 1px solid #ddd;
+            width: 28px; height: 28px; border-radius: 50%; 
+            cursor: pointer; display: flex; align-items: center; justify-content: center; 
+            z-index: 2; transition: all 0.2s;
+        }
+        .pin-btn:hover { background: #fff; color: #666; }
+        /* 激活状态 */
+        .pin-btn.active { background: #ff4757; color: white; border-color: #ff4757; box-shadow: 0 2px 8px rgba(255, 71, 87, 0.4); }
+
         #status { margin-top: 10px; color: #666; font-size: 14px; font-weight: 500; }
     </style>
     
@@ -62,10 +78,7 @@
             <div class="progress-container" id="progressBox">
                 <div id="progressLabel">Preparing...</div>
                 <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBar"></div></div>
-                <div class="progress-text">
-                    <span id="progressCount">0/0</span>
-                    <span id="progressPercent">0%</span>
-                </div>
+                <div class="progress-text"><span id="progressCount">0/0</span><span id="progressPercent">0%</span></div>
             </div>
 
             <div id="status">Ready</div>
@@ -82,14 +95,12 @@
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'; // 支持压缩模型的缩略图生成
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'; 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, deleteDoc, doc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, query, orderBy, onSnapshot, updateDoc, getDocs, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
-        // ==========================================
-        // TODO: 粘贴你的 firebaseConfig
-        // ==========================================
+        // === Firebase Config ===
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
             authDomain: "online-white-box.firebaseapp.com",
@@ -104,12 +115,12 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        // Three.js 全局变量 (用于复用，防止内存泄漏)
         let scene, camera, renderer, loader;
         
         window.handleFileSelect = handleFileSelect;
         window.processBatchUpload = processBatchUpload;
         window.deleteModel = deleteModel;
+        window.togglePin = togglePin; // 新增置顶函数
 
         let selectedFiles = [];
         
@@ -122,7 +133,6 @@
             
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf5f5f7);
-            
             const ambient = new THREE.AmbientLight(0xffffff, 1.5);
             scene.add(ambient);
             const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
@@ -142,24 +152,18 @@
 
         function handleFileSelect(input) {
             if (input.files && input.files.length > 0) {
-                // 将 FileList 转为数组
                 selectedFiles = Array.from(input.files);
-                
                 document.getElementById('fileName').innerText = `${selectedFiles.length} Files Selected`;
                 document.getElementById('status').innerText = "Ready to start batch upload.";
                 document.getElementById('saveBtn').disabled = false;
                 document.getElementById('saveBtn').innerText = `Upload ${selectedFiles.length} Files`;
-                
-                // 隐藏占位符，显示预览框准备给用户看动画
                 document.getElementById('upload-text').style.display = 'block';
                 document.getElementById('preview-canvas-container').style.display = 'block';
             }
         }
 
-        // === 核心逻辑：批量处理队列 ===
         async function processBatchUpload() {
             if (selectedFiles.length === 0) return;
-
             const btn = document.getElementById('saveBtn');
             const status = document.getElementById('status');
             const pBox = document.getElementById('progressBox');
@@ -170,18 +174,16 @@
 
             btn.disabled = true;
             pBox.style.display = 'block';
-            document.getElementById('upload-text').style.display = 'none'; // 隐藏文字，只看图
+            document.getElementById('upload-text').style.display = 'none';
 
             let successCount = 0;
             let failCount = 0;
 
-            // 遍历文件数组
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
                 const currentIndex = i + 1;
                 const total = selectedFiles.length;
 
-                // 更新 UI
                 pLabel.innerText = `Processing: ${file.name}`;
                 pCount.innerText = `${currentIndex}/${total}`;
                 const overallPercent = ((i / total) * 100).toFixed(0);
@@ -190,56 +192,31 @@
                 status.innerText = `Analyzing model ${currentIndex} of ${total}...`;
 
                 try {
-                    // 1. 生成缩略图 (这里会更新预览画布)
                     const thumbBlob = await generateThumbnailPromise(file);
-
-                    // 2. 上传文件
                     status.innerText = `Uploading ${file.name}...`;
                     await uploadSingleFile(file, thumbBlob);
-                    
                     successCount++;
-
                 } catch (err) {
                     console.error(`Failed to upload ${file.name}:`, err);
                     failCount++;
                 }
             }
 
-            // 全部完成
             pBar.style.width = '100%';
             pPercent.innerText = '100%';
             status.innerText = `🎉 Done! Success: ${successCount}, Failed: ${failCount}`;
             btn.innerText = "Upload Complete";
-            
-            setTimeout(() => {
-                resetUI();
-            }, 3000);
+            setTimeout(() => { resetUI(); }, 3000);
         }
 
-        // 辅助函数：将旧的回调式 generateThumbnail 包装成 Promise
         function generateThumbnailPromise(file) {
             return new Promise((resolve, reject) => {
                 const url = URL.createObjectURL(file);
-                
-                // 清理场景中旧模型
-                const oldModel = scene.children.find(c => c.type === 'Group' || c.type === 'Object3D'); // 简易清理
+                const oldModel = scene.children.find(c => c.type === 'Group' || c.type === 'Object3D');
                 if(oldModel) scene.remove(oldModel);
                 
-                // 为了避免 scene.children 清理不干净，我们把 lights 保持住，只移除 mesh
-                scene.traverse((child) => {
-                    if (child.isMesh) {
-                        child.geometry.dispose();
-                        if(child.material) child.material.dispose();
-                    }
-                });
-                // 重新清空（除了灯光）太麻烦，我们直接把 Scene 除了灯光外的 Group 移走
-                // 简单点：重新建个 Scene? 不，复用性能更好。
-                // 我们直接加载，加载完把新模型 add 进去，截图完再 remove。
-
                 loader.load(url, (gltf) => {
                     const model = gltf.scene;
-
-                    // 计算包围盒并居中
                     const box = new THREE.Box3().setFromObject(model);
                     const center = box.getCenter(new THREE.Vector3());
                     const size = box.getSize(new THREE.Vector3());
@@ -247,54 +224,37 @@
                     model.position.x = -center.x;
                     model.position.y = -center.y;
                     model.position.z = -center.z;
-                    
                     scene.add(model);
 
-                    // 调整相机
                     const maxDim = Math.max(size.x, size.y, size.z);
                     const fov = camera.fov * (Math.PI / 180);
                     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
                     cameraZ *= 1.5;
-                    
                     camera.position.set(0, size.y * 0.2, cameraZ);
                     camera.lookAt(0, 0, 0);
 
-                    // 渲染并截图
-                    // 稍微延时一帧确保材质加载
                     setTimeout(() => {
                         renderer.render(scene, camera);
                         renderer.domElement.toBlob((blob) => {
-                            // 清理
                             scene.remove(model);
                             URL.revokeObjectURL(url);
                             resolve(blob);
                         }, 'image/jpeg', 0.8);
                     }, 50);
-
-                }, undefined, (err) => {
-                    URL.revokeObjectURL(url);
-                    // 即使缩略图生成失败，也允许继续上传模型，只是没有图
-                    console.warn("Thumb gen failed", err);
-                    resolve(null); 
-                });
+                }, undefined, (err) => { resolve(null); });
             });
         }
 
-        // 辅助函数：上传单个文件的完整流程
         async function uploadSingleFile(file, thumbBlob) {
             const timestamp = Date.now();
-            // 加个随机数防止批量上传时时间戳撞车
             const randomId = Math.floor(Math.random() * 1000); 
             const modelName = `${timestamp}_${randomId}_${file.name}`;
             const thumbName = `${timestamp}_${randomId}_thumb.jpg`;
 
-            // A. 上传模型
             const modelRef = ref(storage, 'library/' + modelName);
-            // 这里我们不需要 uploadTask 的进度条了，因为我们有总进度条
             const modelSnapshot = await uploadBytesResumable(modelRef, file);
             const modelUrl = await getDownloadURL(modelSnapshot.ref);
 
-            // B. 上传缩略图 (如果有)
             let thumbUrl = null;
             let thumbPath = null;
             if (thumbBlob) {
@@ -304,7 +264,6 @@
                 thumbPath = thumbRef.fullPath;
             }
 
-            // C. 写入数据库
             await addDoc(collection(db, "model_library"), {
                 name: file.name,
                 url: modelUrl,
@@ -312,7 +271,8 @@
                 thumbPath: thumbPath,
                 storagePath: modelRef.fullPath,
                 uploadDate: new Date(),
-                active: true
+                active: true,
+                pinned: false // 默认不置顶
             });
         }
 
@@ -325,7 +285,7 @@
             document.getElementById('saveBtn').disabled = true;
             document.getElementById('saveBtn').innerText = "Upload All Files";
             document.getElementById('status').innerText = "Ready";
-            document.getElementById('fileInput').value = ''; // 清空 input
+            document.getElementById('fileInput').value = '';
         }
 
         function loadGalleryGrid() {
@@ -339,8 +299,15 @@
                     const data = docSnap.data();
                     const card = document.createElement('div');
                     card.className = 'card';
+                    
                     const thumbContent = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div class="no-thumb">🧊</div>`;
+                    
+                    // 置顶按钮状态
+                    const pinClass = data.pinned ? 'active' : '';
+                    const pinTitle = data.pinned ? 'Unpin' : 'Pin to Top';
+
                     card.innerHTML = `
+                        <button class="pin-btn ${pinClass}" title="${pinTitle}" onclick="togglePin('${docSnap.id}', ${data.pinned})">📌</button>
                         <button class="delete-btn" onclick="deleteModel('${docSnap.id}', '${data.storagePath}', '${data.thumbPath}')">×</button>
                         <div class="card-thumb">${thumbContent}</div>
                         <div class="card-info"><div class="card-title" title="${data.name}">${data.name}</div></div>
@@ -348,6 +315,30 @@
                     grid.appendChild(card);
                 });
             });
+        }
+
+        // === 新功能：排他性置顶逻辑 ===
+        async function togglePin(docId, currentStatus) {
+            const batch = writeBatch(db);
+            const isPinning = !currentStatus; // 如果当前没pin，那就是要pin
+
+            if (isPinning) {
+                // 如果是去置顶，先把其他所有的都取消置顶
+                const pinnedQ = query(collection(db, "model_library"), where("pinned", "==", true));
+                const pinnedDocs = await getDocs(pinnedQ);
+                pinnedDocs.forEach(doc => {
+                    batch.update(doc.ref, { pinned: false });
+                });
+                // 然后把当前的设为 true
+                const currentRef = doc(db, "model_library", docId);
+                batch.update(currentRef, { pinned: true });
+            } else {
+                // 如果是取消置顶，直接设为 false
+                const currentRef = doc(db, "model_library", docId);
+                batch.update(currentRef, { pinned: false });
+            }
+
+            await batch.commit();
         }
 
         async function deleteModel(docId, storagePath, thumbPath) {
