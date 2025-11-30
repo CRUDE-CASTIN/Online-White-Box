@@ -31,7 +31,8 @@
         
         #instruction { 
             position: absolute; bottom: 30px; width: 100%; text-align: center; 
-            color: #bbb; font-size: 11px; z-index: 999; pointer-events: none; 
+            color: #bbb; font-size: 10px; 
+            z-index: 999; pointer-events: none; 
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
@@ -40,17 +41,26 @@
             width: 160px; height: 160px; 
             z-index: 1500; display: none;
         }
-        .joystick-base { width: 100%; height: 100%; background: transparent; border: none; position: relative; }
+        .joystick-base {
+            width: 100%; height: 100%;
+            background: transparent;
+            border: none;
+            position: relative;
+        }
         .joystick-knob {
             width: 40px; height: 40px; 
             background: rgba(0, 0, 0, 0.2); 
             border-radius: 50%;
-            position: absolute; top: 50%; left: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             pointer-events: none;
             transition: transform 0.1s;
         }
-        .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
+        .joystick-active .joystick-knob {
+            background: rgba(0, 0, 0, 0.4);
+            transform: translate(-50%, -50%) scale(1.1);
+        }
 
         @media (max-width: 768px) {
             #instruction { display: none; }
@@ -69,10 +79,19 @@
     </script>
 </head>
 <body>
-    <div id="intro-overlay"><div id="loading-msg">ENTERING...</div></div>
+    <div id="intro-overlay">
+        <div id="loading-msg">ENTERING...</div>
+    </div>
+    
     <div id="click-capture"></div>
-    <div id="instruction">Click to Start | WASD to Move</div>
-    <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
+    
+    <div id="instruction">Click to Start | WASD to Move | Double Click to Reset</div>
+
+    <div id="joystick-zone">
+        <div class="joystick-base">
+            <div class="joystick-knob" id="joystick-knob"></div>
+        </div>
+    </div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -142,11 +161,18 @@
             targetRotationX = camera.rotation.x;
 
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); hemiLight.position.set(0, 20, 0); scene.add(hemiLight);
+            
             const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); 
-            keyLight.position.set(0, 15, 0); keyLight.castShadow = true;
-            keyLight.shadow.mapSize.set(2048, 2048); keyLight.shadow.bias = -0.0001; keyLight.shadow.radius = 10; 
+            keyLight.position.set(0, 15, 0); 
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.set(2048, 2048); 
+            keyLight.shadow.bias = -0.0001; 
+            // === 修改点 1: 增大阴影半径，使投影更柔和羽化 ===
+            keyLight.shadow.radius = 35; // 原来是 10，增加到 35 以获得更明显的羽化效果
+            
             const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
             scene.add(keyLight);
+            
             const fillLight = new THREE.DirectionalLight(0xffeedd, 1.5); fillLight.position.set(-8, 5, 8); scene.add(fillLight);
             const topLight = new THREE.DirectionalLight(0xffffff, 0.8); topLight.position.set(0, 10, -6); scene.add(topLight);
 
@@ -155,6 +181,7 @@
             scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
 
             const planeGeometry = new THREE.PlaneGeometry(200, 200);
+            // 使用 PCFSoftShadowMap 需要配合 shadow.radius
             const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.12 });
             const floor = new THREE.Mesh(planeGeometry, shadowMaterial);
             floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
@@ -163,7 +190,10 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.outputColorSpace = THREE.SRGBColorSpace; 
-            renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            // 确保使用 SoftShadowMap
+            renderer.shadowMap.enabled = true; 
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
             renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.5;
             document.body.appendChild(renderer.domElement);
 
@@ -295,19 +325,34 @@
                 }
             });
             rawModel.position.set(0,0,0); rawModel.scale.set(1,1,1); rawModel.rotation.set(0,0,0); rawModel.updateMatrixWorld(true);
+            
             const initialBox = new THREE.Box3().setFromObject(rawModel);
             const initialSize = initialBox.getSize(new THREE.Vector3());
+            
             const solidHeight = getSolidHeight(rawModel, initialSize.y);
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
             rawModel.scale.setScalar(scaleFactor); rawModel.updateMatrixWorld(true);
+            
             const newBox = new THREE.Box3().setFromObject(rawModel);
             const newCenter = newBox.getCenter(new THREE.Vector3());
             const finalSize = newBox.getSize(new THREE.Vector3());
+            
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
             rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; rawModel.position.y = -newBox.min.y; 
             sculptureWrapper.add(rawModel);
+            
             sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = 0; 
+
+            // === 修改点 2: 强制接地检查 ===
+            // 计算最终容器在世界坐标系中的包围盒
+            const finalWorldBox = new THREE.Box3().setFromObject(sculptureWrapper);
+            // 如果底部的世界坐标 Y 值大于 0 (浮空了)，则向下移动相应的距离
+            if (finalWorldBox.min.y > 0.001) {
+                sculptureWrapper.position.y -= finalWorldBox.min.y;
+            }
+            // ============================
+            
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
             const wrapperZ = targetPosition.z; const labelZ = wrapperZ + (finalSize.z / 2) + 1.0; 
@@ -337,7 +382,6 @@
              tempCam.position.copy(destPos);
              tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
              gsap.to(camera.quaternion, { x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, duration: duration, ease: ease });
-             // 关键：复位时同步目标值，防止跳变
              const euler = new THREE.Euler(0,0,0, 'YXZ');
              euler.setFromQuaternion(tempCam.quaternion);
              targetRotationY = euler.y;
@@ -458,7 +502,6 @@
                 
                 if (controls.isLocked) { 
                     controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); 
-                    // === 修复: 电脑端旋转时实时同步移动端的插值目标，防止ESC跳变 ===
                     targetRotationY = camera.rotation.y;
                     targetRotationX = camera.rotation.x;
                 } else { 
