@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>VOID ARCHIVE // CONSOLE</title>
+    <title>VOID ARCHIVE // MANAGER</title>
     <style>
         :root { 
             --bg: #f2f2f2; 
@@ -26,53 +26,30 @@
             flex-direction: column;
         }
 
-        /* === 1. 顶部仪表盘 (Analytics Dashboard) === */
+        /* 顶部仪表盘 */
         header {
-            background: var(--surface);
-            border-bottom: 1px solid var(--line);
-            padding: 0 30px;
-            height: 70px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-shrink: 0;
+            background: var(--surface); border-bottom: 1px solid var(--line);
+            padding: 0 30px; height: 70px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
         }
         .brand { font-weight: 700; letter-spacing: -0.5px; font-size: 18px; }
-        
         .metrics { display: flex; gap: 40px; height: 100%; align-items: center; }
         .metric-item { display: flex; flex-direction: column; justify-content: center; min-width: 120px; }
         .metric-label { font-size: 10px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 4px; }
         .metric-value { font-family: 'Courier New', monospace; font-weight: 700; font-size: 16px; }
-        
-        /* 进度条样式 */
         .progress-track { width: 100%; height: 4px; background: #eee; margin-top: 4px; border-radius: 2px; overflow: hidden; }
         .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease; }
         .progress-fill.warning { background: #ffcc00; }
         .progress-fill.danger { background: var(--alert); }
 
-        /* === 2. 主体布局 (Split View) === */
+        /* 主体布局 */
         main { display: flex; flex: 1; overflow: hidden; }
 
-        /* 左侧：网格列表 + 上传 */
-        .library-panel {
-            flex: 1;
-            padding: 30px;
-            overflow-y: auto;
-            border-right: 1px solid var(--line);
-        }
+        /* 左侧：库 */
+        .library-panel { flex: 1; padding: 30px; overflow-y: auto; border-right: 1px solid var(--line); }
 
-        /* 上传区域 (更加紧凑) */
         .upload-compact {
-            background: var(--surface);
-            border: 1px dashed #ccc;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            transition: all 0.2s;
-            cursor: pointer;
+            background: var(--surface); border: 1px dashed #ccc; border-radius: 8px; padding: 20px; margin-bottom: 30px;
+            display: flex; align-items: center; justify-content: space-between; transition: all 0.2s; cursor: pointer;
         }
         .upload-compact:hover { border-color: #666; background: #fff; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .upload-status { font-size: 13px; color: var(--text-dim); }
@@ -80,77 +57,61 @@
         .btn-upload:disabled { background: #ccc; cursor: not-allowed; }
 
         /* 网格 */
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 15px;
-        }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; }
         .grid-item {
-            background: var(--surface);
-            border: 1px solid transparent;
-            aspect-ratio: 1;
-            border-radius: 4px;
-            overflow: hidden;
-            cursor: pointer;
-            position: relative;
-            transition: all 0.2s;
+            background: var(--surface); border: 2px solid transparent; aspect-ratio: 1; border-radius: 4px; overflow: hidden;
+            cursor: pointer; position: relative; transition: all 0.2s;
         }
         .grid-item:hover { border-color: #999; }
-        .grid-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+        .grid-item.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+        
+        /* === 修改点 2: 显眼的置顶样式 === */
+        .grid-item.pinned { border-color: var(--accent); border-width: 4px; }
+        .pinned-badge {
+            position: absolute; top: 0; left: 0; background: var(--accent); color: white;
+            font-size: 9px; font-weight: 800; padding: 4px 8px; letter-spacing: 1px;
+            display: none; z-index: 2;
+        }
+        .grid-item.pinned .pinned-badge { display: block; }
+
         .grid-item img { width: 100%; height: 100%; object-fit: cover; }
         .grid-item .no-thumb { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #ccc; font-size: 24px; }
-        
-        /* 状态标记 */
-        .status-dot { position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; border-radius: 50%; }
-        .status-dot.pinned { background: var(--alert); box-shadow: 0 0 4px rgba(255, 59, 48, 0.5); }
 
-        /* === 3. 右侧：检查器 (Inspector) === */
-        .inspector-panel {
-            width: 360px;
-            background: var(--surface);
-            padding: 30px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-        }
-        
+        /* 右侧：检查器 */
+        .inspector-panel { width: 380px; background: var(--surface); padding: 30px; overflow-y: auto; display: flex; flex-direction: column; flex-shrink: 0; border-left: 1px solid var(--line); }
         .inspector-empty { color: var(--text-dim); font-size: 14px; text-align: center; margin-top: 100px; }
         
-        /* 检查器内容 */
         .preview-large {
-            width: 100%;
-            aspect-ratio: 1;
-            background: #f9f9f9;
-            border-radius: 8px;
-            overflow: hidden;
-            margin-bottom: 20px;
-            border: 1px solid var(--line);
-            display: flex; align-items: center; justify-content: center;
+            width: 100%; aspect-ratio: 1; background: #f9f9f9; border-radius: 8px; overflow: hidden; margin-bottom: 20px;
+            border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
         }
         .preview-large img { width: 100%; height: 100%; object-fit: contain; }
 
         .meta-group { margin-bottom: 25px; }
         .meta-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
         .meta-value { font-size: 14px; font-weight: 500; word-break: break-all; font-family: 'Helvetica Neue', sans-serif; }
-        .meta-value.mono { font-family: 'Courier New', monospace; }
+        .meta-value.mono { font-family: 'Courier New', monospace; font-size: 13px; }
+        
+        /* 链接样式 */
+        .storage-link { color: #0066cc; text-decoration: none; border-bottom: 1px solid transparent; transition: border 0.2s; cursor: pointer; }
+        .storage-link:hover { border-bottom-color: #0066cc; }
+
         .art-title { font-family: 'Helvetica Neue', sans-serif; font-weight: 700; font-size: 24px; line-height: 1.2; margin-bottom: 5px; }
 
-        /* 检查器按钮组 */
         .action-group { display: flex; gap: 10px; margin-top: auto; padding-top: 20px; border-top: 1px solid var(--line); }
-        .btn-action { flex: 1; padding: 12px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.2s; }
+        .btn-action { flex: 1; padding: 12px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; text-align: center; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
         
+        /* === 修改点 1: 实时响应的按钮状态 === */
         .btn-pin { background: var(--surface); border: 1px solid var(--line); color: var(--text-main); }
         .btn-pin:hover { border-color: #000; }
-        .btn-pin.active { background: var(--text-main); color: #fff; border-color: var(--text-main); }
+        .btn-pin.is-pinned { background: var(--text-main); color: #fff; border-color: var(--text-main); }
+        .btn-pin.is-pinned:hover { background: #333; border-color: #333; }
         
         .btn-download { background: var(--surface); border: 1px solid var(--line); color: var(--text-main); }
         .btn-download:hover { background: #f0f0f0; }
-
         .btn-delete { background: #fff0f0; border: 1px solid #ffcccc; color: var(--alert); }
         .btn-delete:hover { background: var(--alert); color: white; border-color: var(--alert); }
 
-        /* 隐藏的上传辅助 */
         #preview-canvas-container { display: none; }
         #upload-progress-overlay { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #000; color: white; padding: 10px 20px; border-radius: 30px; font-size: 12px; display: none; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 100; }
     </style>
@@ -177,10 +138,6 @@
                 <div class="metric-label">Storage Used (<span id="stat-size-text">0 MB</span> / 5 GB)</div>
                 <div class="progress-track"><div class="progress-fill" id="stat-storage-bar"></div></div>
             </div>
-            <div class="metric-item">
-                <div class="metric-label">Est. Bandwidth</div>
-                <div class="metric-value" style="color:#aaa;">--</div> 
-            </div>
         </div>
     </header>
 
@@ -195,17 +152,16 @@
                 <input type="file" id="fileInput" accept=".glb, .gltf" multiple style="display: none" onchange="handleFileSelect(this)">
             </div>
 
-            <div class="grid-container" id="gallery-grid">
-                </div>
+            <div class="grid-container" id="gallery-grid"></div>
         </div>
 
         <div class="inspector-panel" id="inspector">
             <div class="inspector-empty">Select an asset to view details</div>
-            </div>
+        </div>
     </main>
 
     <div id="preview-canvas-container"></div>
-    <div id="upload-progress-overlay">Processing 1/5...</div>
+    <div id="upload-progress-overlay">Processing...</div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -231,15 +187,14 @@
         const storage = getStorage(app);
 
         let scene, camera, renderer, loader;
-        let selectedFiles = [];
-        let currentModels = []; // Store fetched data
+        let currentModels = [];
+        let selectedModelId = null; // Track selection
         
         window.handleFileSelect = handleFileSelect;
         
         initThreeJS();
         initDataListener();
 
-        // === 1. 初始化 ThreeJS (用于生成截图) ===
         function initThreeJS() {
             const width = 150, height = 150;
             const container = document.getElementById('preview-canvas-container');
@@ -257,7 +212,6 @@
             loader.setDRACOLoader(dracoLoader);
         }
 
-        // === 2. 命名生成器 (复制自前端，确保一致) ===
         function generateSystematicName(seed) {
             let hash = 0;
             if (!seed || seed.length === 0) return "NULL · 000 · Ø";
@@ -272,7 +226,6 @@
             return `${prefixes[pIndex]} · ${charCode}${num} · ${symbols[sIndex]}`;
         }
 
-        // === 3. 数据监听与仪表盘 ===
         function initDataListener() {
             const q = query(collection(db, "model_library"), orderBy("uploadDate", "desc"));
             onSnapshot(q, (snapshot) => {
@@ -283,52 +236,81 @@
 
                 snapshot.forEach((doc) => {
                     const data = doc.data();
-                    data.id = doc.id; // Append ID
+                    data.id = doc.id;
                     currentModels.push(data);
                     
-                    // 计算存储大小 (如果数据里有size字段)
+                    // 修正大小计算：如果是旧数据没有size，视为0
                     if(data.size) totalBytes += data.size;
 
                     const el = document.createElement('div');
-                    el.className = `grid-item ${data.pinned ? 'pinned' : ''}`;
-                    el.onclick = () => renderInspector(data);
+                    el.className = `grid-item ${data.pinned ? 'pinned' : ''} ${data.id === selectedModelId ? 'selected' : ''}`;
+                    el.onclick = () => selectModel(data.id);
                     
                     const thumb = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div class="no-thumb">#</div>`;
-                    const dot = data.pinned ? `<div class="status-dot pinned"></div>` : '';
                     
-                    el.innerHTML = `${thumb}${dot}`;
+                    // 显眼的 PINNED 标签
+                    const pinBadge = `<div class="pinned-badge">PINNED</div>`;
+                    
+                    el.innerHTML = `${pinBadge}${thumb}`;
                     grid.appendChild(el);
                 });
 
                 updateDashboard(currentModels.length, totalBytes);
+                
+                // === 修复点 1: 自动刷新检查器 ===
+                // 如果当前正在查看某个模型，数据更新后（例如Pin状态改变），立即重绘检查器
+                if (selectedModelId) {
+                    const updatedModel = currentModels.find(m => m.id === selectedModelId);
+                    if (updatedModel) {
+                        renderInspector(updatedModel);
+                    } else {
+                        // 如果被删了
+                        document.getElementById('inspector').innerHTML = '<div class="inspector-empty">Asset deleted</div>';
+                        selectedModelId = null;
+                    }
+                }
             });
         }
 
         function updateDashboard(count, bytes) {
             document.getElementById('stat-count').innerText = count;
-            
-            // 格式化大小
             const mb = (bytes / (1024 * 1024)).toFixed(2);
             document.getElementById('stat-size-text').innerText = `${mb} MB`;
-            
-            // 计算进度 (5GB = 5120MB)
             const percent = Math.min((mb / 5120) * 100, 100);
             const bar = document.getElementById('stat-storage-bar');
             bar.style.width = `${percent}%`;
-            
             if(percent > 80) bar.className = 'progress-fill warning';
             if(percent > 95) bar.className = 'progress-fill danger';
         }
 
-        // === 4. 渲染检查器面板 ===
+        function selectModel(id) {
+            selectedModelId = id;
+            // 更新 Grid 选中状态
+            document.querySelectorAll('.grid-item').forEach(el => el.classList.remove('selected'));
+            // 这里简单处理，onSnapshot 会负责完全重绘，
+            // 但为了点击瞬间的反馈，我们也可以手动加 class，不过上面的 initDataListener 很快就会覆盖它。
+            // 只要数据更新够快，UI 就会同步。
+            
+            const model = currentModels.find(m => m.id === id);
+            if (model) renderInspector(model);
+        }
+
         function renderInspector(data) {
             const panel = document.getElementById('inspector');
             const sysName = generateSystematicName(data.name);
             const dateStr = data.uploadDate ? new Date(data.uploadDate.seconds * 1000).toLocaleDateString() : 'Unknown';
-            const sizeStr = data.size ? (data.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown';
+            // 修复文件大小显示
+            const sizeStr = data.size ? (data.size / 1024 / 1024).toFixed(2) + ' MB' : 'Legacy Asset (N/A)';
             const thumb = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div style="color:#ccc;">No Preview</div>`;
-            const pinnedLabel = data.pinned ? "UNPIN ASSET" : "PIN TO DISPLAY";
-            const pinnedClass = data.pinned ? "active" : "";
+            
+            // Pin 按钮状态
+            const pinnedLabel = data.pinned ? "UNDO PIN" : "PIN TO DISPLAY";
+            const pinnedClass = data.pinned ? "is-pinned" : "";
+
+            // === 修改点 5: 生成 Firebase Console 跳转链接 ===
+            // 这里的 URL 格式基于标准 Firebase 路径规则
+            const encodedPath = encodeURIComponent(data.storagePath);
+            const consoleUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/storage/${firebaseConfig.storageBucket}/files/~2F${encodedPath}`;
 
             panel.innerHTML = `
                 <div class="preview-large">${thumb}</div>
@@ -355,8 +337,8 @@
                 </div>
 
                 <div class="meta-group">
-                    <div class="meta-label">Storage Path</div>
-                    <div class="meta-value mono" style="font-size:10px; color:#999;">${data.storagePath}</div>
+                    <div class="meta-label">Storage Path (Click to Open)</div>
+                    <a href="${consoleUrl}" target="_blank" class="meta-value mono storage-link">${data.storagePath}</a>
                 </div>
 
                 <div class="action-group">
@@ -367,7 +349,6 @@
             `;
         }
 
-        // === 5. 上传逻辑 (自动队列) ===
         function handleFileSelect(input) {
             if (input.files && input.files.length > 0) {
                 const files = Array.from(input.files);
@@ -379,17 +360,13 @@
         async function processQueue(files) {
             const overlay = document.getElementById('upload-progress-overlay');
             overlay.style.display = 'block';
-            
             for (let i = 0; i < files.length; i++) {
                 overlay.innerText = `Processing ${i+1}/${files.length}: ${files[i].name}`;
                 try {
                     const thumbBlob = await generateThumbnailPromise(files[i]);
                     await uploadSingleFile(files[i], thumbBlob);
-                } catch (e) {
-                    console.error(e);
-                }
+                } catch (e) { console.error(e); }
             }
-            
             overlay.innerText = "All Complete";
             setTimeout(() => { overlay.style.display = 'none'; }, 2000);
         }
@@ -397,30 +374,26 @@
         function generateThumbnailPromise(file) {
             return new Promise((resolve) => {
                 const url = URL.createObjectURL(file);
-                // 简易清理
-                scene.children = scene.children.filter(c => c.isLight); // 只保留灯光
-                
+                scene.children = scene.children.filter(c => c.isLight); 
                 loader.load(url, (gltf) => {
                     const model = gltf.scene;
                     const box = new THREE.Box3().setFromObject(model);
                     const center = box.getCenter(new THREE.Vector3());
                     const size = box.getSize(new THREE.Vector3());
-                    model.position.sub(center); // Center
+                    model.position.sub(center); 
                     scene.add(model);
-
                     const maxDim = Math.max(size.x, size.y, size.z);
                     const fov = camera.fov * (Math.PI / 180);
                     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
                     camera.position.set(0, size.y * 0.2, cameraZ);
                     camera.lookAt(0, 0, 0);
-
                     setTimeout(() => {
                         renderer.render(scene, camera);
                         renderer.domElement.toBlob((blob) => {
                             URL.revokeObjectURL(url);
                             resolve(blob);
                         }, 'image/jpeg', 0.8);
-                    }, 100); // Wait for render
+                    }, 100); 
                 }, undefined, () => resolve(null));
             });
         }
@@ -444,7 +417,6 @@
                 thumbPath = thumbRef.fullPath;
             }
 
-            // Save file size for analytics
             await addDoc(collection(db, "model_library"), {
                 name: file.name,
                 url: modelUrl,
@@ -452,17 +424,16 @@
                 thumbPath: thumbPath,
                 storagePath: modelRef.fullPath,
                 uploadDate: new Date(),
-                size: file.size, // Save Size!
+                size: file.size, // 保存文件大小
                 active: true,
                 pinned: false
             });
         }
 
-        // === 6. 功能函数 (Exposed to Window) ===
+        // === Exposed Functions ===
         window.togglePin = async (docId, currentStatus) => {
             const batch = writeBatch(db);
             if (!currentStatus) {
-                // Pin logic: Unpin others first
                 const pinnedQ = query(collection(db, "model_library"), where("pinned", "==", true));
                 const pinnedDocs = await getDocs(pinnedQ);
                 pinnedDocs.forEach(doc => { batch.update(doc.ref, { pinned: false }); });
@@ -471,8 +442,7 @@
                 batch.update(doc(db, "model_library", docId), { pinned: false });
             }
             await batch.commit();
-            // Refresh Inspector UI if needed? OnSnapshot will handle list, but Inspector might need manual update or re-select.
-            // Simplified: Just allow OnSnapshot to update the grid dots.
+            // selectedModelId 保持不变，onSnapshot 会触发 renderInspector 并更新按钮文字
         };
 
         window.deleteModel = async (docId, storagePath, thumbPath) => {
@@ -481,8 +451,6 @@
                 await deleteDoc(doc(db, "model_library", docId));
                 if (storagePath) await deleteObject(ref(storage, storagePath)).catch(e=>{});
                 if (thumbPath && thumbPath !== 'undefined') await deleteObject(ref(storage, thumbPath)).catch(e=>{});
-                // Clear inspector
-                document.getElementById('inspector').innerHTML = '<div class="inspector-empty">Select an asset to view details</div>';
             } catch (e) { alert(e.message); }
         };
     </script>
