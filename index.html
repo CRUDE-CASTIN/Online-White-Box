@@ -316,30 +316,30 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 修改：字号大幅放大，保持纯黑 ===
+            // === 修改点：字号保持巨大，颜色强制纯黑 ===
             
-            // 顶部小字
-            ctx.font = 'bold 70px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; 
-            ctx.fillText("EXHIBITION OF THE DAY", 120, 200);
-
-            // 标题 (超大)
-            ctx.font = 'bold 200px Helvetica, Arial'; 
+            // 顶部小字 (纯黑)
+            ctx.font = 'bold 60px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 120, 500);
+            ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
 
-            // 正文 (大)
-            ctx.font = 'bold 110px Helvetica, Arial'; 
+            // 标题 (纯黑)
+            ctx.font = 'bold 150px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; 
+            ctx.fillText(systematicName, 120, 400);
+
+            // 正文 (纯黑)
+            ctx.font = 'bold 90px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
-            ctx.fillText(mockYear, 120, 750);
-            ctx.fillText(randMat, 120, 950);
-            ctx.fillText(sizeInfo, 120, 1150);
+            ctx.fillText(mockYear, 120, 600);
+            ctx.fillText(randMat, 120, 750);
+            ctx.fillText(sizeInfo, 120, 900);
             
-            // 底部
-            ctx.font = 'bold 70px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; 
-            ctx.fillText("Courtesy of the Digital Archive", 120, 1850);
+            // 底部 (纯黑)
+            ctx.font = 'bold 60px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; 
+            ctx.fillText("Courtesy of the Digital Archive", 120, 1800);
 
             ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 40; ctx.strokeRect(0, 0, 2048, 2048);
 
@@ -622,6 +622,7 @@
             
             if (isIntroFinished) { 
                 if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
+                
                 if (!isZooming && (joystickVector.x !== 0 || joystickVector.y !== 0)) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
                 if (controls.isLocked) { 
                     controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); 
