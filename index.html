@@ -146,8 +146,8 @@
             keyLight.castShadow = true;
             keyLight.shadow.mapSize.set(2048, 2048); 
             keyLight.shadow.bias = -0.0001; 
-            // === 修改 1: 极致柔化阴影 ===
-            keyLight.shadow.radius = 60; // 极大半径 = 极大羽化
+            // 保持极大的羽化半径
+            keyLight.shadow.radius = 60; 
             
             const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
             scene.add(keyLight);
@@ -160,8 +160,8 @@
             scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
 
             const planeGeometry = new THREE.PlaneGeometry(200, 200);
-            // === 修改 2: 降低阴影不透明度，增加空气感 ===
-            const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.08 });
+            // === 修改点：提高阴影不透明度，使其更深 ===
+            const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.2 });
             const floor = new THREE.Mesh(planeGeometry, shadowMaterial);
             floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
 
@@ -170,7 +170,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.outputColorSpace = THREE.SRGBColorSpace; 
             renderer.shadowMap.enabled = true; 
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 柔和阴影核心
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
             renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.5;
             document.body.appendChild(renderer.domElement);
 
@@ -265,31 +265,21 @@
             return mesh;
         }
 
-        // === 修改 3: 强力接地算法 (全顶点扫描) ===
         function forceGrounding(wrapper) {
             let minY = Infinity;
-            // 确保矩阵最新
             wrapper.updateMatrixWorld(true);
-
-            // 深度遍历所有子网格
             wrapper.traverse((child) => {
                 if (child.isMesh && child.geometry) {
                     const pos = child.geometry.attributes.position;
                     const v = new THREE.Vector3();
-                    // 遍历每一个顶点（虽然耗费性能，但这是唯一准确的方法）
-                    // 为了性能折中，我们每隔 3 个点采样一次，通常足够精确
                     for (let i = 0; i < pos.count; i+=3) {
                         v.fromBufferAttribute(pos, i);
-                        // 关键：将顶点转换到世界坐标系
                         v.applyMatrix4(child.matrixWorld);
                         if (v.y < minY) minY = v.y;
                     }
                 }
             });
-
-            // 如果找到了有效的最低点，且它不是 0
             if (minY !== Infinity && Math.abs(minY) > 0.001) {
-                // 将整个 wrapper 向下移动 minY 的距离
                 wrapper.position.y -= minY;
             }
         }
@@ -346,13 +336,11 @@
             
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
             rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; 
-            // 初步落地
             rawModel.position.y = -newBox.min.y; 
             sculptureWrapper.add(rawModel);
             
             sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = 0; 
 
-            // === 执行强力接地 ===
             forceGrounding(sculptureWrapper);
 
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
