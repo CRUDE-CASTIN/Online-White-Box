@@ -6,7 +6,7 @@
     <title>White Void Gallery</title>
     
     <link rel="preconnect" href="https://esm.sh">
-    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net"> 
     <link rel="preconnect" href="https://firebasestorage.googleapis.com">
 
     <style>
@@ -83,9 +83,9 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-                "gsap": "https://unpkg.com/gsap@3.12.5"
+                "three": "https://esm.sh/three@0.160.0",
+                "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
+                "gsap": "https://esm.sh/gsap@3.12.5"
             }
         }
     </script>
@@ -160,6 +160,7 @@
         let pinchStartDist = 0; 
         let pinchStartFOV = DEFAULT_FOV;
         let isZooming = false; 
+        let isZoomCooldown = false;
 
         init();
         animate();
@@ -217,6 +218,16 @@
             
             window.addEventListener('resize', onWindowResize);
 
+            // === 修改 1: 强力超时保险 ===
+            // 如果 8 秒后 isModelLoaded 还是 false，强制加载默认模型并显示
+            // 这能防止网络慢导致永久白屏
+            setTimeout(() => {
+                if (!isModelLoaded) {
+                    console.warn("Loading timeout. Forcing default.");
+                    loadDefaultSculpture();
+                }
+            }, 8000);
+
             if(db) checkPinAndLoad(); 
             else loadDefaultSculpture();
         }
@@ -236,6 +247,7 @@
             setInterval(update, 1000);
         }
 
+        // === 修改 2: 伪随机与每日算法 (找回) ===
         function mulberry32(a) {
             return function() {
                 var t = a += 0x6D2B79F5;
@@ -245,30 +257,29 @@
             }
         }
 
-        // === 核心：确定性每日轮播算法 ===
         function getDailyModelID(models) {
             if (!models || models.length === 0) return null;
             const sortedModels = [...models].sort((a, b) => a.uploadDate.seconds - b.uploadDate.seconds);
             const now = new Date();
             const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
+            // 周期 = 总模型数
             const cycle = Math.floor(daysSinceEpoch / sortedModels.length);
-            const rng = mulberry32(cycle); // 使用 Cycle 作为种子
-            
-            // 确定性洗牌
+            // 使用周期数作为随机种子，保证这一轮顺序固定
+            const rng = mulberry32(cycle);
             const shuffled = [...sortedModels];
+            // 确定性洗牌
             for (let i = shuffled.length - 1; i > 0; i--) {
                 const j = Math.floor(rng() * (i + 1));
                 [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
             }
-            
-            // 选出今日
+            // 取今日
             const dailyIndex = daysSinceEpoch % sortedModels.length;
             return shuffled[dailyIndex].id;
         }
 
         async function checkPinAndLoad() {
             try {
-                // 1. 检查置顶
+                // 1. 置顶优先
                 const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
                 const pinSnapshot = await getDocs(pinQuery);
                 if (!pinSnapshot.empty) {
@@ -276,37 +287,38 @@
                     loadModelFromUrl(pinDoc.url, pinDoc.name);
                     return;
                 }
-
-                // 2. 没有置顶，走每日轮播
+                
+                // 2. 每日轮播
                 const q = query(collection(db, "model_library"), where("active", "==", true));
                 const querySnapshot = await getDocs(q);
                 let models = [];
                 querySnapshot.forEach((doc) => { models.push({ id: doc.id, ...doc.data() }); });
-
                 if (models.length === 0) { loadDefaultSculpture(); return; }
 
-                // 3. 计算今日模型
                 const dailyId = getDailyModelID(models);
                 const selected = models.find(m => m.id === dailyId) || models[0];
                 
-                console.log(`Daily Model (Epoch Day): ${selected.name}`);
                 loadModelFromUrl(selected.url, selected.name);
-
             } catch (error) { console.error(error); loadDefaultSculpture(); }
         }
 
         function loadModelFromUrl(url, name) {
             const loader = new GLTFLoader();
             const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+            // === 修改 1: 使用 jsdelivr 替换 unpkg，优化国内访问 ===
+            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
             loader.setDRACOLoader(dracoLoader);
             loader.load(url, (gltf) => {
                 processAndPlaceModel(gltf.scene, name);
                 revealScene();
-            }, undefined, (err) => { revealScene(); });
+            }, undefined, (err) => { 
+                console.error("Load error, fallback", err);
+                loadDefaultSculpture(); 
+            });
         }
 
         function loadDefaultSculpture() {
+            if (isModelLoaded) return; // 防止重复加载
             const group = new THREE.Group();
             const material = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2, metalness: 0.8 });
             const geo = new THREE.TorusKnotGeometry(0.8, 0.25, 128, 64);
@@ -352,7 +364,7 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 保持大字号，纯黑 ===
+            // 保持大字号，纯黑
             ctx.font = 'bold 80px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText("EXHIBITION OF THE DAY", 100, 140);
@@ -451,6 +463,7 @@
         }
 
         function revealScene() {
+            if (isIntroFinished) return; // 防止重复调用
             setTimeout(() => {
                 gsap.to(introOverlayDiv, { opacity: 0, duration: 2.0, ease: "power2.inOut", 
                     onComplete: () => { 
@@ -614,7 +627,7 @@
 
             document.addEventListener('touchmove', (e) => {
                 if (!isIntroFinished) return;
-                if (isZooming) return; 
+                if (isZooming || isZoomCooldown) return; 
 
                 let touch = null;
                 for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { touch = e.changedTouches[i]; break; } }
