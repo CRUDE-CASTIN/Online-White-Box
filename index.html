@@ -4,22 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>White Void Gallery</title>
+    
     <link rel="preconnect" href="https://esm.sh">
     <link rel="preconnect" href="https://www.gstatic.com">
     <link rel="preconnect" href="https://firebasestorage.googleapis.com">
+
     <style>
         body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
-        #intro-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 2000; pointer-events: none; display: flex; justify-content: center; align-items: center; opacity: 1; }
-        #loading-msg { font-size: 10px; color: #aaa; letter-spacing: 3px; font-weight: 500; animation: pulse 2s infinite; }
+        
+        #intro-overlay { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background-color: #ffffff; 
+            z-index: 2000; 
+            pointer-events: none; 
+            display: flex; justify-content: center; align-items: center;
+            opacity: 1; 
+        }
+
+        #loading-msg {
+            font-size: 10px; color: #aaa; letter-spacing: 3px; font-weight: 500;
+            animation: pulse 2s infinite;
+        }
         @keyframes pulse { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
-        #instruction { position: absolute; bottom: 30px; width: 100%; text-align: center; color: #bbb; font-size: 11px; z-index: 999; pointer-events: none; opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase; }
-        #joystick-zone { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 160px; height: 160px; z-index: 1500; display: none; }
+        
+        #instruction { 
+            position: absolute; bottom: 30px; width: 100%; text-align: center; 
+            color: #bbb; font-size: 11px; z-index: 999; pointer-events: none; 
+            opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
+        }
+
+        #joystick-zone {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            width: 160px; height: 160px; 
+            z-index: 1500; display: none;
+        }
         .joystick-base { width: 100%; height: 100%; background: transparent; border: none; position: relative; }
-        .joystick-knob { width: 40px; height: 40px; background: rgba(0, 0, 0, 0.2); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; transition: transform 0.1s; }
+        .joystick-knob {
+            width: 40px; height: 40px; 
+            background: rgba(0, 0, 0, 0.2); 
+            border-radius: 50%;
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            transition: transform 0.1s;
+        }
         .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
-        @media (max-width: 768px) { #instruction { display: none; } #joystick-zone { display: block; } }
+
+        @media (max-width: 768px) {
+            #instruction { display: none; }
+            #joystick-zone { display: block; }
+        }
     </style>
+    
     <script type="importmap">
         {
             "imports": {
@@ -45,6 +83,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // === Firebase Config ===
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
             authDomain: "online-white-box.firebaseapp.com",
@@ -72,19 +111,17 @@
         const MOBILE_CAM_POS = new THREE.Vector3(0, 1.7, 14);
         
         let isModelLoaded = false;
-        let isIntroFinished = false; // === 新增：交互锁状态 ===
+        let isIntroFinished = false; 
         
         const clickCaptureDiv = document.getElementById('click-capture');
         const introOverlayDiv = document.getElementById('intro-overlay');
         const instructionText = document.getElementById('instruction');
 
-        // 移动端控制变量
         let joystickVector = { x: 0, y: 0 }; 
         let lookTouchId = null;
         let lastLookX = 0; let lastLookY = 0;
         let lastTapTime = 0; let lastTapPos = { x: 0, y: 0 };
         
-        // === 新增：丝滑阻尼变量 ===
         let targetRotationY = 0;
         let targetRotationX = 0;
 
@@ -101,7 +138,6 @@
             camera.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
             camera.rotation.order = 'YXZ'; 
             
-            // 初始化目标角度为当前角度
             targetRotationY = camera.rotation.y;
             targetRotationX = camera.rotation.x;
 
@@ -287,7 +323,7 @@
                         introOverlayDiv.style.display = 'none'; 
                         clickCaptureDiv.style.display = 'block'; 
                         instructionText.style.opacity = '1';
-                        isIntroFinished = true; // === 关键：动画结束后才解锁交互 ===
+                        isIntroFinished = true; 
                     }
                 });
             }, 100);
@@ -301,7 +337,7 @@
              tempCam.position.copy(destPos);
              tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
              gsap.to(camera.quaternion, { x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, duration: duration, ease: ease });
-             // 同步丝滑阻尼的目标值，防止复位后跳变
+             // 关键：复位时同步目标值，防止跳变
              const euler = new THREE.Euler(0,0,0, 'YXZ');
              euler.setFromQuaternion(tempCam.quaternion);
              targetRotationY = euler.y;
@@ -329,7 +365,7 @@
             let joystickTouchId = null;
 
             joystickZone.addEventListener('touchstart', (e) => {
-                if (!isIntroFinished) return; // 锁
+                if (!isIntroFinished) return; 
                 e.preventDefault();
                 const touch = e.changedTouches[0];
                 joystickTouchId = touch.identifier;
@@ -374,7 +410,7 @@
             }
 
             document.addEventListener('touchstart', (e) => {
-                if (!isIntroFinished) return; // 锁
+                if (!isIntroFinished) return; 
                 if (e.target.closest('#joystick-zone')) return;
                 const touch = e.changedTouches[0];
                 lookTouchId = touch.identifier;
@@ -389,8 +425,7 @@
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
                 
-                // === 修改：丝滑阻尼逻辑 ===
-                const sensitivity = 0.004; // 灵敏度
+                const sensitivity = 0.004; 
                 targetRotationY -= deltaX * sensitivity;
                 targetRotationX -= deltaY * sensitivity;
                 targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
@@ -417,20 +452,20 @@
             velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; 
             direction.z = Number(moveForward) - Number(moveBackward); direction.x = Number(moveRight) - Number(moveLeft); direction.normalize(); 
             
-            if (isIntroFinished) { // 只在进入后处理移动逻辑
+            if (isIntroFinished) { 
                 if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
                 if (joystickVector.x !== 0 || joystickVector.y !== 0) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
                 
-                if (controls.isLocked) { // 桌面模式
+                if (controls.isLocked) { 
                     controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); 
-                } else { // 移动端/非锁定模式
+                    // === 修复: 电脑端旋转时实时同步移动端的插值目标，防止ESC跳变 ===
+                    targetRotationY = camera.rotation.y;
+                    targetRotationX = camera.rotation.x;
+                } else { 
                     const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize(); 
                     const camRight = new THREE.Vector3(); camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); 
                     camera.position.addScaledVector(camDir, -velocity.z * delta); camera.position.addScaledVector(camRight, -velocity.x * delta);
                     
-                    // === 新增：丝滑插值应用 ===
-                    // 只有在非PointerLock模式下（即触摸模式），我们才手动插值旋转
-                    // 使用 Lerp 逼近目标值，系数 0.1 决定了“阻尼感”
                     camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
                     camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
                 }
