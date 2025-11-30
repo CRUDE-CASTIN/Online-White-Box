@@ -29,21 +29,24 @@
 
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
         
-        /* 操作提示：往上挪一点，给时钟腾位置 */
         #instruction { 
-            position: absolute; bottom: 50px; width: 100%; text-align: center; 
-            color: #bbb; font-size: 10px; 
+            position: absolute; bottom: 60px; width: 100%; text-align: center; 
+            color: #ccc; font-size: 9px; 
             z-index: 999; pointer-events: none; 
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
-        /* === 新增：实时时钟 === */
+        /* === 修改 1: 当代艺术风格时钟 === */
         #realtime-clock {
-            position: absolute; bottom: 20px; width: 100%; text-align: center;
-            color: #999; font-size: 12px; font-family: 'Courier New', Courier, monospace; /* 等宽字体 */
+            position: absolute; bottom: 25px; width: 100%; text-align: center;
+            color: #111; /* 深色，更显眼 */
+            font-size: 14px; 
+            font-weight: 400;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
             z-index: 999; pointer-events: none;
             opacity: 0; transition: opacity 1.0s;
-            letter-spacing: 2px;
+            letter-spacing: 3px; /* 宽间距带来高级感 */
+            font-variant-numeric: tabular-nums; /* 等宽数字，防止秒数跳动 */
         }
 
         #joystick-zone {
@@ -64,7 +67,7 @@
         .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
 
         @media (max-width: 768px) {
-            #instruction { display: none; } /* 移动端隐藏操作提示，但显示时钟 */
+            #instruction { display: none; }
             #joystick-zone { display: block; }
         }
     </style>
@@ -85,7 +88,7 @@
     
     <div id="instruction">Click to Start | WASD to Move | Double Click to Reset</div>
     
-    <div id="realtime-clock">0000-00-00 00:00:00</div>
+    <div id="realtime-clock">00:00:00</div>
 
     <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
 
@@ -131,7 +134,7 @@
         const clickCaptureDiv = document.getElementById('click-capture');
         const introOverlayDiv = document.getElementById('intro-overlay');
         const instructionText = document.getElementById('instruction');
-        const clockDiv = document.getElementById('realtime-clock'); // 获取时钟元素
+        const clockDiv = document.getElementById('realtime-clock');
 
         let joystickVector = { x: 0, y: 0 }; 
         let lookTouchId = null;
@@ -141,7 +144,7 @@
 
         init();
         animate();
-        startClock(); // 启动时钟
+        startClock();
 
         function init() {
             scene = new THREE.Scene();
@@ -164,7 +167,6 @@
             keyLight.shadow.mapSize.set(2048, 2048); 
             keyLight.shadow.bias = -0.0001; 
             keyLight.shadow.radius = 60; 
-            
             const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
             scene.add(keyLight);
             
@@ -198,20 +200,14 @@
             else loadDefaultSculpture();
         }
 
-        // === 新增：实时时钟逻辑 ===
+        // === 修改 1: 简约设计感时钟 ===
         function startClock() {
             function update() {
                 const now = new Date();
-                // 格式化：YYYY-MM-DD HH:MM:SS
-                // 使用 padStart 补零
-                const y = now.getFullYear();
-                const m = String(now.getMonth() + 1).padStart(2, '0');
-                const d = String(now.getDate()).padStart(2, '0');
-                const h = String(now.getHours()).padStart(2, '0');
-                const min = String(now.getMinutes()).padStart(2, '0');
-                const s = String(now.getSeconds()).padStart(2, '0');
-                
-                clockDiv.innerText = `${y}-${m}-${d} ${h}:${min}:${s}`;
+                const date = now.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '.');
+                const time = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                // 格式： 11.28.2023  23:45:12
+                clockDiv.innerText = `${date}  ${time}`;
             }
             update();
             setInterval(update, 1000);
@@ -290,29 +286,51 @@
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
+
+            // === 修改 2: 展签清晰化与尺寸调整 ===
             const canvas = document.createElement('canvas');
-            canvas.width = 512; canvas.height = 512; 
+            canvas.width = 1024; canvas.height = 1024; // 1024 高清分辨率
             const ctx = canvas.getContext('2d');
             
-            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 512, 512);
+            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 1024, 1024);
             ctx.textAlign = 'left';
             
-            // === 修改点 2: 增加顶部标题 "EXHIBITION OF THE DAY" ===
-            ctx.font = '24px Helvetica, Arial'; 
-            ctx.fillStyle = '#888888'; 
-            ctx.fillText("EXHIBITION OF THE DAY", 40, 50); // 顶部小字
+            // 顶部小字
+            ctx.font = '40px Helvetica, Arial'; 
+            ctx.fillStyle = '#666666'; 
+            ctx.fillText("EXHIBITION OF THE DAY", 80, 100);
 
-            // 其他内容下移
-            ctx.font = 'bold 48px Helvetica, Arial'; ctx.fillStyle = '#1a1a1a'; ctx.fillText(systematicName, 40, 110);
-            ctx.font = '36px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(mockYear, 40, 170);
-            ctx.font = '30px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(randMat, 40, 270);
-            ctx.font = '24px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(sizeInfo, 40, 320);
-            ctx.font = '20px Helvetica, Arial'; ctx.fillStyle = '#333333'; ctx.fillText("Courtesy of the Digital Archive", 40, 460);
+            // 标题 (纯黑粗体)
+            ctx.font = 'bold 90px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; 
+            ctx.fillText(systematicName, 80, 220);
+
+            // 正文 (纯黑，字号加大)
+            ctx.font = '60px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; // 纯黑确保可见
+            ctx.fillText(mockYear, 80, 340);
             
-            ctx.strokeStyle = '#999999'; ctx.lineWidth = 10; ctx.strokeRect(0, 0, 512, 512);
+            // 材质 (粗体，纯黑)
+            ctx.font = 'bold 50px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; 
+            ctx.fillText(randMat, 80, 520);
+
+            // 尺寸 (纯黑)
+            ctx.font = '40px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; 
+            ctx.fillText(sizeInfo, 80, 600);
+            
+            // 底部
+            ctx.font = '40px Helvetica, Arial'; 
+            ctx.fillStyle = '#444444'; 
+            ctx.fillText("Courtesy of the Digital Archive", 80, 900);
+
+            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 20; ctx.strokeRect(0, 0, 1024, 1024);
+
             const texture = new THREE.CanvasTexture(canvas);
+            // === 关键：开启各向异性过滤，防止斜视模糊 ===
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             
-            // === 修改点 3: 展签尺寸变大 ===
             const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
             const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.8 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
@@ -376,19 +394,15 @@
                 }
             });
             rawModel.position.set(0,0,0); rawModel.scale.set(1,1,1); rawModel.rotation.set(0,0,0); rawModel.updateMatrixWorld(true);
-            
             const initialBox = new THREE.Box3().setFromObject(rawModel);
             const initialSize = initialBox.getSize(new THREE.Vector3());
             const solidHeight = getSolidHeight(rawModel, initialSize.y);
-            
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
             rawModel.scale.setScalar(scaleFactor); rawModel.updateMatrixWorld(true);
-            
             const newBox = new THREE.Box3().setFromObject(rawModel);
             const newCenter = newBox.getCenter(new THREE.Vector3());
             const finalSize = newBox.getSize(new THREE.Vector3());
-            
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
             rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; 
             rawModel.position.y = -newBox.min.y; 
@@ -410,7 +424,7 @@
                         introOverlayDiv.style.display = 'none'; 
                         clickCaptureDiv.style.display = 'block'; 
                         instructionText.style.opacity = '1';
-                        clockDiv.style.opacity = '1'; // 显示时钟
+                        clockDiv.style.opacity = '1'; 
                         resetMovementState();
                         isIntroFinished = true; 
                     }
