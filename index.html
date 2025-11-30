@@ -41,26 +41,17 @@
             width: 160px; height: 160px; 
             z-index: 1500; display: none;
         }
-        .joystick-base {
-            width: 100%; height: 100%;
-            background: transparent;
-            border: none;
-            position: relative;
-        }
+        .joystick-base { width: 100%; height: 100%; background: transparent; border: none; position: relative; }
         .joystick-knob {
             width: 40px; height: 40px; 
             background: rgba(0, 0, 0, 0.2); 
             border-radius: 50%;
-            position: absolute;
-            top: 50%; left: 50%;
+            position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             pointer-events: none;
             transition: transform 0.1s;
         }
-        .joystick-active .joystick-knob {
-            background: rgba(0, 0, 0, 0.4);
-            transform: translate(-50%, -50%) scale(1.1);
-        }
+        .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
 
         @media (max-width: 768px) {
             #instruction { display: none; }
@@ -79,19 +70,10 @@
     </script>
 </head>
 <body>
-    <div id="intro-overlay">
-        <div id="loading-msg">ENTERING...</div>
-    </div>
-    
+    <div id="intro-overlay"><div id="loading-msg">ENTERING...</div></div>
     <div id="click-capture"></div>
-    
     <div id="instruction">Click to Start | WASD to Move | Double Click to Reset</div>
-
-    <div id="joystick-zone">
-        <div class="joystick-base">
-            <div class="joystick-knob" id="joystick-knob"></div>
-        </div>
-    </div>
+    <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -102,7 +84,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // === Firebase Config ===
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
             authDomain: "online-white-box.firebaseapp.com",
@@ -140,9 +121,7 @@
         let lookTouchId = null;
         let lastLookX = 0; let lastLookY = 0;
         let lastTapTime = 0; let lastTapPos = { x: 0, y: 0 };
-        
-        let targetRotationY = 0;
-        let targetRotationX = 0;
+        let targetRotationY = 0; let targetRotationX = 0;
 
         init();
         animate();
@@ -167,8 +146,8 @@
             keyLight.castShadow = true;
             keyLight.shadow.mapSize.set(2048, 2048); 
             keyLight.shadow.bias = -0.0001; 
-            // === 修改点 1: 增大阴影半径，使投影更柔和羽化 ===
-            keyLight.shadow.radius = 35; // 原来是 10，增加到 35 以获得更明显的羽化效果
+            // === 修改 1: 极致柔化阴影 ===
+            keyLight.shadow.radius = 60; // 极大半径 = 极大羽化
             
             const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
             scene.add(keyLight);
@@ -181,8 +160,8 @@
             scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
 
             const planeGeometry = new THREE.PlaneGeometry(200, 200);
-            // 使用 PCFSoftShadowMap 需要配合 shadow.radius
-            const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.12 });
+            // === 修改 2: 降低阴影不透明度，增加空气感 ===
+            const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.08 });
             const floor = new THREE.Mesh(planeGeometry, shadowMaterial);
             floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
 
@@ -190,10 +169,8 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.outputColorSpace = THREE.SRGBColorSpace; 
-            // 确保使用 SoftShadowMap
             renderer.shadowMap.enabled = true; 
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 柔和阴影核心
             renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.5;
             document.body.appendChild(renderer.domElement);
 
@@ -288,6 +265,35 @@
             return mesh;
         }
 
+        // === 修改 3: 强力接地算法 (全顶点扫描) ===
+        function forceGrounding(wrapper) {
+            let minY = Infinity;
+            // 确保矩阵最新
+            wrapper.updateMatrixWorld(true);
+
+            // 深度遍历所有子网格
+            wrapper.traverse((child) => {
+                if (child.isMesh && child.geometry) {
+                    const pos = child.geometry.attributes.position;
+                    const v = new THREE.Vector3();
+                    // 遍历每一个顶点（虽然耗费性能，但这是唯一准确的方法）
+                    // 为了性能折中，我们每隔 3 个点采样一次，通常足够精确
+                    for (let i = 0; i < pos.count; i+=3) {
+                        v.fromBufferAttribute(pos, i);
+                        // 关键：将顶点转换到世界坐标系
+                        v.applyMatrix4(child.matrixWorld);
+                        if (v.y < minY) minY = v.y;
+                    }
+                }
+            });
+
+            // 如果找到了有效的最低点，且它不是 0
+            if (minY !== Infinity && Math.abs(minY) > 0.001) {
+                // 将整个 wrapper 向下移动 minY 的距离
+                wrapper.position.y -= minY;
+            }
+        }
+
         function getSolidHeight(model, boxHeight) {
             const yCoords = [];
             model.traverse((child) => {
@@ -328,8 +334,8 @@
             
             const initialBox = new THREE.Box3().setFromObject(rawModel);
             const initialSize = initialBox.getSize(new THREE.Vector3());
-            
             const solidHeight = getSolidHeight(rawModel, initialSize.y);
+            
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
             rawModel.scale.setScalar(scaleFactor); rawModel.updateMatrixWorld(true);
@@ -339,20 +345,16 @@
             const finalSize = newBox.getSize(new THREE.Vector3());
             
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
-            rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; rawModel.position.y = -newBox.min.y; 
+            rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; 
+            // 初步落地
+            rawModel.position.y = -newBox.min.y; 
             sculptureWrapper.add(rawModel);
             
             sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = 0; 
 
-            // === 修改点 2: 强制接地检查 ===
-            // 计算最终容器在世界坐标系中的包围盒
-            const finalWorldBox = new THREE.Box3().setFromObject(sculptureWrapper);
-            // 如果底部的世界坐标 Y 值大于 0 (浮空了)，则向下移动相应的距离
-            if (finalWorldBox.min.y > 0.001) {
-                sculptureWrapper.position.y -= finalWorldBox.min.y;
-            }
-            // ============================
-            
+            // === 执行强力接地 ===
+            forceGrounding(sculptureWrapper);
+
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
             const wrapperZ = targetPosition.z; const labelZ = wrapperZ + (finalSize.z / 2) + 1.0; 
@@ -468,12 +470,10 @@
                 if (!touch) return;
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
-                
                 const sensitivity = 0.004; 
                 targetRotationY -= deltaX * sensitivity;
                 targetRotationX -= deltaY * sensitivity;
                 targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
-                
             }, {passive: false});
 
             document.addEventListener('touchend', (e) => { for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { lookTouchId = null; break; } } });
