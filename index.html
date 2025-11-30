@@ -6,7 +6,7 @@
     <title>White Void Gallery</title>
     
     <link rel="preconnect" href="https://esm.sh">
-    <link rel="preconnect" href="https://www.gstatic.com">
+    <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://firebasestorage.googleapis.com">
 
     <style>
@@ -29,23 +29,15 @@
 
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
         
-        /* === 修改 1: 位置互换 === */
-        
-        /* 时钟：移到上方 (Bottom 50px) */
         #realtime-clock {
             position: absolute; bottom: 50px; width: 100%; text-align: center;
-            color: #333; 
-            font-size: 12px; 
-            font-weight: 400;
+            color: #333; font-size: 12px; font-weight: 400;
             font-family: 'Courier New', Courier, monospace; 
             z-index: 999; pointer-events: none;
             opacity: 0; transition: opacity 1.0s;
-            letter-spacing: 6px; 
-            transform: scaleX(1.1); 
-            font-variant-numeric: tabular-nums; 
+            letter-spacing: 6px; transform: scaleX(1.1); font-variant-numeric: tabular-nums; 
         }
 
-        /* 操作提示：移到最下方 (Bottom 20px) */
         #instruction { 
             position: absolute; bottom: 20px; width: 100%; text-align: center; 
             color: #ccc; font-size: 9px; 
@@ -79,9 +71,9 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
+                "three": "https://esm.sh/three@0.160.0",
+                "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
+                "gsap": "https://esm.sh/gsap@3.12.5"
             }
         }
     </script>
@@ -91,7 +83,7 @@
     <div id="click-capture"></div>
     
     <div id="realtime-clock">0000-00-00 00:00:00</div>
-    <div id="instruction">Click to Start | WASD to Move | Double Click to Reset</div>
+    <div id="instruction">Click to Start | WASD to Move | Scroll to Zoom</div>
     
     <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
 
@@ -145,6 +137,11 @@
         let lastTapTime = 0; let lastTapPos = { x: 0, y: 0 };
         let targetRotationY = 0; let targetRotationX = 0;
 
+        // === 变焦相关变量 ===
+        const DEFAULT_FOV = 70;
+        let targetFOV = DEFAULT_FOV; // 目标 FOV
+        let pinchStartDist = 0; // 捏合初始距离
+
         init();
         animate();
         startClock();
@@ -152,7 +149,7 @@
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xffffff);
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera = new THREE.PerspectiveCamera(DEFAULT_FOV, window.innerWidth / window.innerHeight, 0.1, 100);
             
             if (window.innerWidth < window.innerHeight) { camera.position.copy(MOBILE_CAM_POS); } 
             else { camera.position.copy(DESKTOP_CAM_POS); }
@@ -197,6 +194,8 @@
             controls = new PointerLockControls(camera, document.body);
             
             setupControlsEvents(); setupKeyControls(); setupTouchControls(); setupDoubleClickReset(); 
+            setupZoomControls(); // === 新增：变焦控制 ===
+            
             window.addEventListener('resize', onWindowResize);
 
             if(db) checkPinAndLoad(); 
@@ -218,6 +217,7 @@
             setInterval(update, 1000);
         }
 
+        // ... (checkPinAndLoad, loadModelFromUrl, loadDefaultSculpture, generateSystematicName ... 保持不变) ...
         async function checkPinAndLoad() {
             try {
                 const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
@@ -292,42 +292,42 @@
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
 
-            // === 修改 2: 画布 1024x1024，字号全面放大 ===
+            // === 修改 2: 回归精致排版，保持 4K 高清 ===
             const canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 1024; 
+            canvas.width = 2048; canvas.height = 2048; 
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 1024, 1024);
+            
+            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // "EXHIBITION OF THE DAY" 放大
+            // "EXHIBITION OF THE DAY" 缩小，灰色，更精致
             ctx.font = 'bold 50px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; 
-            ctx.fillText("EXHIBITION OF THE DAY", 60, 100);
+            ctx.fillStyle = '#666666'; 
+            ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
 
-            // 标题 (特大)
-            ctx.font = 'bold 120px Helvetica, Arial'; 
+            // 标题 (大)
+            ctx.font = 'bold 140px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 60, 300);
+            ctx.fillText(systematicName, 120, 400);
 
-            // 正文 (加粗, 放大)
+            // 正文 (中等大小，留白更多)
             ctx.font = 'bold 80px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
-            ctx.fillText(mockYear, 60, 500);
-            ctx.fillText(randMat, 60, 650);
-            ctx.fillText(sizeInfo, 60, 800);
+            ctx.fillText(mockYear, 120, 600);
+            ctx.fillText(randMat, 120, 750);
+            ctx.fillText(sizeInfo, 120, 900);
             
-            // 底部 (放大)
-            ctx.font = 'bold 40px Helvetica, Arial'; 
+            // 底部
+            ctx.font = 'bold 50px Helvetica, Arial'; 
             ctx.fillStyle = '#333333'; 
-            ctx.fillText("Courtesy of the Digital Archive", 60, 960);
+            ctx.fillText("Courtesy of the Digital Archive", 120, 1800);
 
-            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 1024, 1024);
+            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 2048, 2048);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             
-            // === 修改 3: 展签尺寸恢复 0.4 ===
             const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
             const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.8 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
@@ -335,47 +335,23 @@
             return mesh;
         }
 
-        function forceGrounding(wrapper) {
-            let minY = Infinity;
-            wrapper.updateMatrixWorld(true);
-            wrapper.traverse((child) => {
-                if (child.isMesh && child.geometry) {
-                    const pos = child.geometry.attributes.position;
-                    const v = new THREE.Vector3();
-                    for (let i = 0; i < pos.count; i+=3) {
-                        v.fromBufferAttribute(pos, i);
-                        v.applyMatrix4(child.matrixWorld);
-                        if (v.y < minY) minY = v.y;
-                    }
-                }
-            });
-            if (minY !== Infinity && Math.abs(minY) > 0.001) {
-                wrapper.position.y -= minY;
-            }
-        }
-
+        // ... (getSolidHeight, forceGrounding, processAndPlaceModel... 保持不变) ...
         function getSolidHeight(model, boxHeight) {
             const yCoords = [];
-            model.traverse((child) => {
-                if (child.isMesh && child.geometry) {
-                    const pos = child.geometry.attributes.position;
-                    const v = new THREE.Vector3();
-                    for (let i = 0; i < pos.count; i += 5) {
-                        v.fromBufferAttribute(pos, i);
-                        v.applyMatrix4(child.matrix);
-                        yCoords.push(v.y);
-                    }
-                }
-            });
+            model.traverse((child) => { if (child.isMesh && child.geometry) { const pos = child.geometry.attributes.position; const v = new THREE.Vector3(); for (let i = 0; i < pos.count; i += 5) { v.fromBufferAttribute(pos, i); v.applyMatrix4(child.matrix); yCoords.push(v.y); } } });
             if (yCoords.length === 0) return boxHeight; 
             yCoords.sort((a, b) => a - b);
-            const trimStart = Math.floor(yCoords.length * 0.02); 
-            const trimEnd = Math.floor(yCoords.length * 0.98);
-            const minY = yCoords[trimStart] || yCoords[0];
-            const maxY = yCoords[trimEnd] || yCoords[yCoords.length - 1];
+            const trimStart = Math.floor(yCoords.length * 0.02); const trimEnd = Math.floor(yCoords.length * 0.98);
+            const minY = yCoords[trimStart] || yCoords[0]; const maxY = yCoords[trimEnd] || yCoords[yCoords.length - 1];
             let solidH = maxY - minY;
             if (solidH < boxHeight * 0.2) return boxHeight;
             return solidH;
+        }
+
+        function forceGrounding(wrapper) {
+            let minY = Infinity; wrapper.updateMatrixWorld(true);
+            wrapper.traverse((child) => { if (child.isMesh && child.geometry) { const pos = child.geometry.attributes.position; const v = new THREE.Vector3(); for (let i = 0; i < pos.count; i+=3) { v.fromBufferAttribute(pos, i); v.applyMatrix4(child.matrixWorld); if (v.y < minY) minY = v.y; } } });
+            if (minY !== Infinity && Math.abs(minY) > 0.001) { wrapper.position.y -= minY; }
         }
 
         function processAndPlaceModel(rawModel, rawName) {
@@ -443,6 +419,7 @@
                  onUpdate: () => {
                      targetRotationY = camera.rotation.y;
                      targetRotationX = camera.rotation.x;
+                     targetFOV = DEFAULT_FOV; // 复位时 FOV 也复位
                  },
                  onComplete: () => { 
                      isResetting = false; 
@@ -454,6 +431,7 @@
              tempCam.position.copy(destPos);
              tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
              tl.to(camera.quaternion, { x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, duration: duration, ease: ease }, 0);
+             tl.to(camera, { fov: DEFAULT_FOV, duration: duration, ease: ease }, 0); // 复位FOV
         }
 
         function setupDoubleClickReset() {
@@ -466,6 +444,60 @@
                 if (tapLength < 250 && tapLength > 0 && dist < 30) { e.preventDefault(); resetCamera(0.5, "power2.inOut"); } 
                 else { lastTapPos = { x: touch.clientX, y: touch.clientY }; lastTapTime = currentTime; }
             }, { passive: false });
+        }
+
+        // === 新增：变焦控制逻辑 (PC + Mobile) ===
+        function setupZoomControls() {
+            // 1. PC 滚轮变焦
+            document.addEventListener('wheel', (e) => {
+                if (!isIntroFinished || isResetting) return;
+                
+                // 滚轮向下(正)是拉远(FOV变大)，向上(负)是拉近(FOV变小)
+                const sensitivity = 0.05;
+                targetFOV += e.deltaY * sensitivity;
+                
+                // 限制 FOV 范围 (10度 ~ 90度)
+                targetFOV = THREE.MathUtils.clamp(targetFOV, 10, 90);
+            }, { passive: true });
+
+            // 2. 移动端双指捏合
+            document.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    pinchStartDist = Math.sqrt(dx*dx + dy*dy);
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2 && isIntroFinished && !isResetting) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    // 计算缩放比例
+                    const zoomFactor = pinchStartDist / dist; 
+                    // 这里为了手感更自然，直接基于当前 targetFOV 计算
+                    // 如果手张开(dist变大)，factor < 1，FOV 变小 (Zoom In)
+                    // 如果手捏合(dist变小)，factor > 1，FOV 变大 (Zoom Out)
+                    
+                    // 用缓动的方式更新 targetFOV，避免跳变
+                    let newFov = targetFOV * zoomFactor;
+                    
+                    // 稍微平滑一点输入
+                    targetFOV += (newFov - targetFOV) * 0.2; 
+                    targetFOV = THREE.MathUtils.clamp(targetFOV, 10, 90);
+                    
+                    pinchStartDist = dist; // 更新基准距离
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchend', (e) => {
+                // 移动端松手后，自动回弹到默认 FOV
+                if (e.touches.length < 2) {
+                    targetFOV = DEFAULT_FOV;
+                }
+            });
         }
 
         function setupTouchControls() {
@@ -524,6 +556,7 @@
             document.addEventListener('touchstart', (e) => {
                 if (!isIntroFinished) return; 
                 if (e.target.closest('#joystick-zone')) return;
+                if (e.touches.length > 1) return; // 双指操作交给 Zoom 处理
                 const touch = e.changedTouches[0];
                 lookTouchId = touch.identifier;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
@@ -552,7 +585,11 @@
         }
         
         function setupKeyControls() { const onKeyDown = (e) => { if(!isIntroFinished) return; switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = true; break; case 'ArrowLeft': case 'KeyA': moveLeft = true; break; case 'ArrowDown': case 'KeyS': moveBackward = true; break; case 'ArrowRight': case 'KeyD': moveRight = true; break; } }; const onKeyUp = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = false; break; case 'ArrowLeft': case 'KeyA': moveLeft = false; break; case 'ArrowDown': case 'KeyS': moveBackward = false; break; case 'ArrowRight': case 'KeyD': moveRight = false; break; } }; document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp); }
-        function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+        function onWindowResize() { 
+            camera.aspect = window.innerWidth / window.innerHeight; 
+            camera.updateProjectionMatrix(); 
+            renderer.setSize(window.innerWidth, window.innerHeight); 
+        }
         function checkCollision() { if (!sculptureWrapper) return; const playerPos = new THREE.Vector2(camera.position.x, camera.position.z); const objectPos = new THREE.Vector2(sculptureWrapper.position.x, sculptureWrapper.position.z); const distance = playerPos.distanceTo(objectPos); if (distance < colliderRadius) { const pushDir = playerPos.sub(objectPos).normalize(); const newPos = objectPos.add(pushDir.multiplyScalar(colliderRadius)); camera.position.x = newPos.x; camera.position.z = newPos.y; } }
         
         function animate() { 
@@ -591,6 +628,12 @@
                 checkCollision(); 
             }
             
+            // === 变焦平滑插值 ===
+            if (camera.fov !== targetFOV) {
+                camera.fov += (targetFOV - camera.fov) * 0.1; // 阻尼系数
+                camera.updateProjectionMatrix();
+            }
+
             prevTime = time; 
             renderer.render(scene, camera); 
         }
