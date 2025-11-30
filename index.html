@@ -38,18 +38,29 @@
             letter-spacing: 6px; transform: scaleX(1.1); font-variant-numeric: tabular-nums; 
         }
 
-        /* === 修改：分端显示提示 === */
         #instruction { 
             position: absolute; bottom: 20px; width: 100%; text-align: center; 
             color: #ccc; 
-            font-size: 10px; /* 电脑端标准字号 */
+            font-size: 10px; 
             z-index: 999; pointer-events: none; 
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
-        /* 默认显示电脑端文字，隐藏手机端文字 */
-        .mobile-text { display: none; }
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            #joystick-zone { display: block; }
+            #instruction { 
+                font-size: 8px; 
+                letter-spacing: 0.5px; 
+                width: 96%; left: 2%; 
+                white-space: nowrap; 
+            }
+            .desktop-text { display: none; }
+            .mobile-text { display: inline; }
+        }
+
         .desktop-text { display: inline; }
+        .mobile-text { display: none; }
 
         #joystick-zone {
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
@@ -67,21 +78,6 @@
             transition: transform 0.1s;
         }
         .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
-
-        /* === 移动端适配 === */
-        @media (max-width: 768px) {
-            #joystick-zone { display: block; }
-            
-            #instruction { 
-                font-size: 8px; /* 移动端极小字号 */
-                letter-spacing: 0.5px; 
-                width: 96%; left: 2%; 
-                white-space: nowrap; /* 强制一行 */
-            }
-            /* 切换显示内容 */
-            .desktop-text { display: none; }
-            .mobile-text { display: inline; }
-        }
     </style>
     
     <script type="importmap">
@@ -317,36 +313,49 @@
             const canvas = document.createElement('canvas');
             canvas.width = 2048; canvas.height = 2048; 
             const ctx = canvas.getContext('2d');
-            
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            ctx.font = 'bold 50px Helvetica, Arial'; 
+            // === 修改：大字号，加粗，纯黑 ===
+            
+            // 顶部小字 (放大)
+            ctx.font = 'bold 60px Helvetica, Arial'; 
             ctx.fillStyle = '#333333'; 
-            ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
+            ctx.fillText("EXHIBITION OF THE DAY", 100, 140);
 
-            ctx.font = 'bold 140px Helvetica, Arial'; 
+            // 标题 (巨大)
+            ctx.font = 'bold 150px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 120, 400);
+            ctx.fillText(systematicName, 100, 400);
 
-            ctx.font = 'bold 80px Helvetica, Arial'; 
+            // 正文 (巨大)
+            ctx.font = 'bold 90px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
-            ctx.fillText(mockYear, 120, 600);
-            ctx.fillText(randMat, 120, 750);
-            ctx.fillText(sizeInfo, 120, 900);
+            ctx.fillText(mockYear, 100, 600);
+            ctx.fillText(randMat, 100, 750);
+            ctx.fillText(sizeInfo, 100, 900);
             
-            ctx.font = 'bold 50px Helvetica, Arial'; 
+            // 底部 (放大)
+            ctx.font = 'bold 60px Helvetica, Arial'; 
             ctx.fillStyle = '#333333'; 
-            ctx.fillText("Courtesy of the Digital Archive", 120, 1800);
+            ctx.fillText("Courtesy of the Digital Archive", 100, 1800);
 
             ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 2048, 2048);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             
+            // 几何体保持 0.4m
             const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
-            const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.8 });
+            
+            // === 修改：材质全哑光，防止反光泛白 ===
+            const labelMat = new THREE.MeshStandardMaterial({ 
+                map: texture, 
+                color: 0xffffff, 
+                roughness: 1.0, // 全粗糙
+                metalness: 0.0  // 非金属
+            });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
             mesh.castShadow = true; mesh.receiveShadow = true;
             return mesh;
