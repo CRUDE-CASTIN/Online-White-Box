@@ -4,60 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>White Void Gallery</title>
-    
     <link rel="preconnect" href="https://esm.sh">
     <link rel="preconnect" href="https://www.gstatic.com">
     <link rel="preconnect" href="https://firebasestorage.googleapis.com">
-
     <style>
         body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
-        
-        #intro-overlay { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background-color: #ffffff; 
-            z-index: 2000; 
-            pointer-events: none; 
-            display: flex; justify-content: center; align-items: center;
-            opacity: 1; 
-        }
-
-        #loading-msg {
-            font-size: 10px; color: #aaa; letter-spacing: 3px; font-weight: 500;
-            animation: pulse 2s infinite;
-        }
+        #intro-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 2000; pointer-events: none; display: flex; justify-content: center; align-items: center; opacity: 1; }
+        #loading-msg { font-size: 10px; color: #aaa; letter-spacing: 3px; font-weight: 500; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
-
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
-        
-        #instruction { 
-            position: absolute; bottom: 30px; width: 100%; text-align: center; 
-            color: #bbb; font-size: 11px; z-index: 999; pointer-events: none; 
-            opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
-        }
-
-        #joystick-zone {
-            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
-            width: 160px; height: 160px; 
-            z-index: 1500; display: none;
-        }
+        #instruction { position: absolute; bottom: 30px; width: 100%; text-align: center; color: #bbb; font-size: 11px; z-index: 999; pointer-events: none; opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase; }
+        #joystick-zone { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 160px; height: 160px; z-index: 1500; display: none; }
         .joystick-base { width: 100%; height: 100%; background: transparent; border: none; position: relative; }
-        .joystick-knob {
-            width: 40px; height: 40px; 
-            background: rgba(0, 0, 0, 0.2); 
-            border-radius: 50%;
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            transition: transform 0.1s;
-        }
+        .joystick-knob { width: 40px; height: 40px; background: rgba(0, 0, 0, 0.2); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; transition: transform 0.1s; }
         .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
-
-        @media (max-width: 768px) {
-            #instruction { display: none; }
-            #joystick-zone { display: block; }
-        }
+        @media (max-width: 768px) { #instruction { display: none; } #joystick-zone { display: block; } }
     </style>
-    
     <script type="importmap">
         {
             "imports": {
@@ -83,7 +45,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // === Firebase Config ===
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
             authDomain: "online-white-box.firebaseapp.com",
@@ -107,19 +68,25 @@
         let labelMesh; 
         let colliderRadius = 0.1; 
         const targetPosition = new THREE.Vector3(0, 0, -6);
-        // === 修改 1: 定义桌面和移动端的不同初始位置 ===
-        const DESKTOP_CAM_POS = new THREE.Vector3(0, 1.7, 8); // 桌面端退后到 8
-        const MOBILE_CAM_POS = new THREE.Vector3(0, 1.7, 14);  // 移动端退后到 14，确保左右不切边
+        const DESKTOP_CAM_POS = new THREE.Vector3(0, 1.7, 8); 
+        const MOBILE_CAM_POS = new THREE.Vector3(0, 1.7, 14);
+        
         let isModelLoaded = false;
+        let isIntroFinished = false; // === 新增：交互锁状态 ===
         
         const clickCaptureDiv = document.getElementById('click-capture');
         const introOverlayDiv = document.getElementById('intro-overlay');
         const instructionText = document.getElementById('instruction');
 
+        // 移动端控制变量
         let joystickVector = { x: 0, y: 0 }; 
         let lookTouchId = null;
         let lastLookX = 0; let lastLookY = 0;
         let lastTapTime = 0; let lastTapPos = { x: 0, y: 0 };
+        
+        // === 新增：丝滑阻尼变量 ===
+        let targetRotationY = 0;
+        let targetRotationX = 0;
 
         init();
         animate();
@@ -129,18 +96,14 @@
             scene.background = new THREE.Color(0xffffff);
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
             
-            // === 修改 2: 根据屏幕比例智能选择初始位置 ===
-            if (window.innerWidth < window.innerHeight) {
-                // 竖屏 (手机)
-                camera.position.copy(MOBILE_CAM_POS);
-            } else {
-                // 横屏 (桌面)
-                camera.position.copy(DESKTOP_CAM_POS);
-            }
-            // 确保初始就看向雕塑中心
+            if (window.innerWidth < window.innerHeight) { camera.position.copy(MOBILE_CAM_POS); } 
+            else { camera.position.copy(DESKTOP_CAM_POS); }
             camera.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
-
             camera.rotation.order = 'YXZ'; 
+            
+            // 初始化目标角度为当前角度
+            targetRotationY = camera.rotation.y;
+            targetRotationX = camera.rotation.x;
 
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); hemiLight.position.set(0, 20, 0); scene.add(hemiLight);
             const keyLight = new THREE.DirectionalLight(0xffffff, 3.5); 
@@ -181,33 +144,22 @@
             try {
                 const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
                 const pinSnapshot = await getDocs(pinQuery);
-
                 if (!pinSnapshot.empty) {
                     const pinDoc = pinSnapshot.docs[0].data();
-                    console.log("Loading pinned model:", pinDoc.name);
                     loadModelFromUrl(pinDoc.url, pinDoc.name);
                     return;
                 }
-
                 const q = query(collection(db, "model_library"), where("active", "==", true));
                 const querySnapshot = await getDocs(q);
                 let models = [];
                 querySnapshot.forEach((doc) => { models.push({ id: doc.id, ...doc.data() }); });
-
                 if (models.length === 0) { loadDefaultSculpture(); return; }
-
                 const lastModelId = localStorage.getItem('last_model_id');
-                if (models.length > 1 && lastModelId) {
-                    models = models.filter(m => m.id !== lastModelId);
-                }
-
+                if (models.length > 1 && lastModelId) { models = models.filter(m => m.id !== lastModelId); }
                 const index = Math.floor(Math.random() * models.length);
                 const selected = models[index];
                 localStorage.setItem('last_model_id', selected.id);
-                
-                console.log(`Loading random model: ${selected.name}`);
                 loadModelFromUrl(selected.url, selected.name);
-
             } catch (error) { console.error(error); loadDefaultSculpture(); }
         }
 
@@ -216,14 +168,10 @@
             const dracoLoader = new DRACOLoader();
             dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
             loader.setDRACOLoader(dracoLoader);
-
             loader.load(url, (gltf) => {
                 processAndPlaceModel(gltf.scene, name);
                 revealScene();
-            }, undefined, (err) => { 
-                console.error("Load failed:", err);
-                revealScene(); 
-            });
+            }, undefined, (err) => { revealScene(); });
         }
 
         function loadDefaultSculpture() {
@@ -238,10 +186,7 @@
         function generateSystematicName(seed) {
             let hash = 0;
             if (!seed || seed.length === 0) return "NULL · 000 · Ø";
-            for (let i = 0; i < seed.length; i++) {
-                hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-                hash |= 0; 
-            }
+            for (let i = 0; i < seed.length; i++) { hash = ((hash << 5) - hash) + seed.charCodeAt(i); hash |= 0; }
             hash = Math.abs(hash);
             const prefixes = ["OBJ", "ARCH", "SYS", "NODE", "DATA", "CORE", "FLUX", "VOID", "UNIT", "SPEC", "FORM"];
             const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
@@ -258,11 +203,9 @@
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
-
             const canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 512; 
             const ctx = canvas.getContext('2d');
-            
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 512, 512);
             ctx.textAlign = 'left';
             ctx.font = 'bold 50px Helvetica, Arial'; ctx.fillStyle = '#1a1a1a'; ctx.fillText(systematicName, 40, 80);
@@ -271,7 +214,6 @@
             ctx.font = '24px Helvetica, Arial'; ctx.fillStyle = '#333333'; ctx.fillText(sizeInfo, 40, 310);
             ctx.font = '20px Helvetica, Arial'; ctx.fillStyle = '#555555'; ctx.fillText("Courtesy of the Digital Archive", 40, 460);
             ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 10; ctx.strokeRect(0, 0, 512, 512);
-
             const texture = new THREE.CanvasTexture(canvas);
             const labelGeo = new THREE.BoxGeometry(0.3, 0.015, 0.3); 
             const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.8 });
@@ -300,16 +242,13 @@
             const minY = yCoords[trimStart] || yCoords[0];
             const maxY = yCoords[trimEnd] || yCoords[yCoords.length - 1];
             let solidH = maxY - minY;
-            if (solidH < boxHeight * 0.2) {
-                return boxHeight;
-            }
+            if (solidH < boxHeight * 0.2) return boxHeight;
             return solidH;
         }
 
         function processAndPlaceModel(rawModel, rawName) {
             if (sculptureWrapper) scene.remove(sculptureWrapper);
             if (labelMesh) scene.remove(labelMesh);
-
             rawModel.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true; child.receiveShadow = true;
@@ -319,75 +258,54 @@
                     }
                 }
             });
-
-            rawModel.position.set(0,0,0);
-            rawModel.scale.set(1,1,1);
-            rawModel.rotation.set(0,0,0);
-            rawModel.updateMatrixWorld(true);
-
+            rawModel.position.set(0,0,0); rawModel.scale.set(1,1,1); rawModel.rotation.set(0,0,0); rawModel.updateMatrixWorld(true);
             const initialBox = new THREE.Box3().setFromObject(rawModel);
             const initialSize = initialBox.getSize(new THREE.Vector3());
-
             const solidHeight = getSolidHeight(rawModel, initialSize.y);
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
-            
-            rawModel.scale.setScalar(scaleFactor);
-            rawModel.updateMatrixWorld(true);
-
+            rawModel.scale.setScalar(scaleFactor); rawModel.updateMatrixWorld(true);
             const newBox = new THREE.Box3().setFromObject(rawModel);
             const newCenter = newBox.getCenter(new THREE.Vector3());
             const finalSize = newBox.getSize(new THREE.Vector3());
-
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
-            
-            rawModel.position.x = -newCenter.x;
-            rawModel.position.z = -newCenter.z;
-            rawModel.position.y = -newBox.min.y; 
+            rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; rawModel.position.y = -newBox.min.y; 
             sculptureWrapper.add(rawModel);
-
-            sculptureWrapper.position.copy(targetPosition);
-            sculptureWrapper.rotation.y = 0; 
-
+            sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = 0; 
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
-            
-            const wrapperZ = targetPosition.z;
-            const labelZ = wrapperZ + (finalSize.z / 2) + 1.0; 
-            
-            labelMesh.position.set(0, 0.01, labelZ); 
-            labelMesh.rotation.x = 0; 
-            scene.add(labelMesh);
-
+            const wrapperZ = targetPosition.z; const labelZ = wrapperZ + (finalSize.z / 2) + 1.0; 
+            labelMesh.position.set(0, 0.01, labelZ); labelMesh.rotation.x = 0; scene.add(labelMesh);
             colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.1; 
             isModelLoaded = true;
         }
 
         function revealScene() {
             setTimeout(() => {
-                gsap.to(introOverlayDiv, { 
-                    opacity: 0, duration: 2.0, ease: "power2.inOut", 
+                gsap.to(introOverlayDiv, { opacity: 0, duration: 2.0, ease: "power2.inOut", 
                     onComplete: () => { 
                         introOverlayDiv.style.display = 'none'; 
                         clickCaptureDiv.style.display = 'block'; 
-                        instructionText.style.opacity = '1'; 
+                        instructionText.style.opacity = '1';
+                        isIntroFinished = true; // === 关键：动画结束后才解锁交互 ===
                     }
                 });
             }, 100);
         }
 
-        // === 修改 3: 复位时同样根据屏幕比例选择目标位置 ===
         function resetCamera(duration = 1.5, ease = "power2.inOut") {
-             if (!isModelLoaded) return;
-             // 检测当前屏幕比例，决定复位到哪个位置
+             if (!isModelLoaded || !isIntroFinished) return;
              const destPos = (window.innerWidth < window.innerHeight) ? MOBILE_CAM_POS : DESKTOP_CAM_POS;
-             
              gsap.to(camera.position, { x: destPos.x, y: destPos.y, z: destPos.z, duration: duration, ease: ease });
              const tempCam = camera.clone();
-             // 让临时相机也去到目标位置，计算看向目标的角度
              tempCam.position.copy(destPos);
              tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
              gsap.to(camera.quaternion, { x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, duration: duration, ease: ease });
+             // 同步丝滑阻尼的目标值，防止复位后跳变
+             const euler = new THREE.Euler(0,0,0, 'YXZ');
+             euler.setFromQuaternion(tempCam.quaternion);
+             targetRotationY = euler.y;
+             targetRotationX = euler.x;
         }
 
         function setupDoubleClickReset() {
@@ -411,6 +329,7 @@
             let joystickTouchId = null;
 
             joystickZone.addEventListener('touchstart', (e) => {
+                if (!isIntroFinished) return; // 锁
                 e.preventDefault();
                 const touch = e.changedTouches[0];
                 joystickTouchId = touch.identifier;
@@ -419,6 +338,7 @@
             }, {passive: false});
 
             joystickZone.addEventListener('touchmove', (e) => {
+                if (!isIntroFinished) return;
                 e.preventDefault();
                 for (let i = 0; i < e.changedTouches.length; i++) {
                     if (e.changedTouches[i].identifier === joystickTouchId) {
@@ -454,6 +374,7 @@
             }
 
             document.addEventListener('touchstart', (e) => {
+                if (!isIntroFinished) return; // 锁
                 if (e.target.closest('#joystick-zone')) return;
                 const touch = e.changedTouches[0];
                 lookTouchId = touch.identifier;
@@ -461,15 +382,19 @@
             }, {passive: false});
 
             document.addEventListener('touchmove', (e) => {
+                if (!isIntroFinished) return;
                 let touch = null;
                 for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { touch = e.changedTouches[i]; break; } }
                 if (!touch) return;
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
-                const sensitivity = 0.01; 
-                camera.rotation.y -= deltaX * sensitivity; 
-                camera.rotation.x -= deltaY * sensitivity; 
-                camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+                
+                // === 修改：丝滑阻尼逻辑 ===
+                const sensitivity = 0.004; // 灵敏度
+                targetRotationY -= deltaX * sensitivity;
+                targetRotationX -= deltaY * sensitivity;
+                targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
+                
             }, {passive: false});
 
             document.addEventListener('touchend', (e) => { for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { lookTouchId = null; break; } } });
@@ -478,10 +403,10 @@
         function setupControlsEvents() { 
             controls.addEventListener('lock', () => { clickCaptureDiv.style.display = 'none'; instructionText.style.opacity = '0'; }); 
             controls.addEventListener('unlock', () => { if (isModelLoaded) { clickCaptureDiv.style.display = 'block'; instructionText.style.opacity = '1'; } }); 
-            if (!('ontouchstart' in window)) { clickCaptureDiv.addEventListener('click', () => controls.lock()); } else { clickCaptureDiv.style.display = 'none'; }
+            if (!('ontouchstart' in window)) { clickCaptureDiv.addEventListener('click', () => { if(isIntroFinished) controls.lock(); }); } else { clickCaptureDiv.style.display = 'none'; }
         }
         
-        function setupKeyControls() { const onKeyDown = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = true; break; case 'ArrowLeft': case 'KeyA': moveLeft = true; break; case 'ArrowDown': case 'KeyS': moveBackward = true; break; case 'ArrowRight': case 'KeyD': moveRight = true; break; } }; const onKeyUp = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = false; break; case 'ArrowLeft': case 'KeyA': moveLeft = false; break; case 'ArrowDown': case 'KeyS': moveBackward = false; break; case 'ArrowRight': case 'KeyD': moveRight = false; break; } }; document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp); }
+        function setupKeyControls() { const onKeyDown = (e) => { if(!isIntroFinished) return; switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = true; break; case 'ArrowLeft': case 'KeyA': moveLeft = true; break; case 'ArrowDown': case 'KeyS': moveBackward = true; break; case 'ArrowRight': case 'KeyD': moveRight = true; break; } }; const onKeyUp = (e) => { switch (e.code) { case 'ArrowUp': case 'KeyW': moveForward = false; break; case 'ArrowLeft': case 'KeyA': moveLeft = false; break; case 'ArrowDown': case 'KeyS': moveBackward = false; break; case 'ArrowRight': case 'KeyD': moveRight = false; break; } }; document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp); }
         function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
         function checkCollision() { if (!sculptureWrapper) return; const playerPos = new THREE.Vector2(camera.position.x, camera.position.z); const objectPos = new THREE.Vector2(sculptureWrapper.position.x, sculptureWrapper.position.z); const distance = playerPos.distanceTo(objectPos); if (distance < colliderRadius) { const pushDir = playerPos.sub(objectPos).normalize(); const newPos = objectPos.add(pushDir.multiplyScalar(colliderRadius)); camera.position.x = newPos.x; camera.position.z = newPos.y; } }
         
@@ -491,11 +416,29 @@
             const delta = (time - prevTime) / 1000;
             velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; 
             direction.z = Number(moveForward) - Number(moveBackward); direction.x = Number(moveRight) - Number(moveLeft); direction.normalize(); 
-            if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
-            if (joystickVector.x !== 0 || joystickVector.y !== 0) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
-            if (controls.isLocked) { controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); } 
-            else { const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize(); const camRight = new THREE.Vector3(); camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); camera.position.addScaledVector(camDir, -velocity.z * delta); camera.position.addScaledVector(camRight, -velocity.x * delta); }
-            checkCollision(); prevTime = time; renderer.render(scene, camera); 
+            
+            if (isIntroFinished) { // 只在进入后处理移动逻辑
+                if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
+                if (joystickVector.x !== 0 || joystickVector.y !== 0) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
+                
+                if (controls.isLocked) { // 桌面模式
+                    controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); 
+                } else { // 移动端/非锁定模式
+                    const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize(); 
+                    const camRight = new THREE.Vector3(); camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); 
+                    camera.position.addScaledVector(camDir, -velocity.z * delta); camera.position.addScaledVector(camRight, -velocity.x * delta);
+                    
+                    // === 新增：丝滑插值应用 ===
+                    // 只有在非PointerLock模式下（即触摸模式），我们才手动插值旋转
+                    // 使用 Lerp 逼近目标值，系数 0.1 决定了“阻尼感”
+                    camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
+                    camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
+                }
+                checkCollision(); 
+            }
+            
+            prevTime = time; 
+            renderer.render(scene, camera); 
         }
     </script>
 </body>
