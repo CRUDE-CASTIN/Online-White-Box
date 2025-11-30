@@ -112,6 +112,7 @@
         
         let isModelLoaded = false;
         let isIntroFinished = false; 
+        let isResetting = false; // === 新增：复位状态锁 ===
         
         const clickCaptureDiv = document.getElementById('click-capture');
         const introOverlayDiv = document.getElementById('intro-overlay');
@@ -146,7 +147,6 @@
             keyLight.castShadow = true;
             keyLight.shadow.mapSize.set(2048, 2048); 
             keyLight.shadow.bias = -0.0001; 
-            // 保持极大的羽化半径
             keyLight.shadow.radius = 60; 
             
             const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
@@ -160,7 +160,6 @@
             scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
 
             const planeGeometry = new THREE.PlaneGeometry(200, 200);
-            // === 修改点：提高阴影不透明度，使其更深 ===
             const shadowMaterial = new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.2 });
             const floor = new THREE.Mesh(planeGeometry, shadowMaterial);
             floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
@@ -364,18 +363,40 @@
             }, 100);
         }
 
+        // === 修改：复位逻辑 ===
         function resetCamera(duration = 1.5, ease = "power2.inOut") {
-             if (!isModelLoaded || !isIntroFinished) return;
+             if (!isModelLoaded || !isIntroFinished || isResetting) return;
+             isResetting = true; // 上锁
+
              const destPos = (window.innerWidth < window.innerHeight) ? MOBILE_CAM_POS : DESKTOP_CAM_POS;
-             gsap.to(camera.position, { x: destPos.x, y: destPos.y, z: destPos.z, duration: duration, ease: ease });
+             
+             // 创建一个 Timeline 确保两个动画同步且回调正确
+             const tl = gsap.timeline({
+                 onUpdate: () => {
+                     // 关键：在复位动画的每一帧，强制更新目标角度
+                     // 这样当动画结束，isResetting 解锁时，lerp 的目标就是当前位置，不会跳变
+                     targetRotationY = camera.rotation.y;
+                     targetRotationX = camera.rotation.x;
+                 },
+                 onComplete: () => {
+                     isResetting = false; // 解锁
+                 }
+             });
+
+             tl.to(camera.position, { x: destPos.x, y: destPos.y, z: destPos.z, duration: duration, ease: ease }, 0);
+             
              const tempCam = camera.clone();
              tempCam.position.copy(destPos);
              tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
-             gsap.to(camera.quaternion, { x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, duration: duration, ease: ease });
-             const euler = new THREE.Euler(0,0,0, 'YXZ');
-             euler.setFromQuaternion(tempCam.quaternion);
-             targetRotationY = euler.y;
-             targetRotationX = euler.x;
+             
+             tl.to(camera.quaternion, { 
+                 x: tempCam.quaternion.x, 
+                 y: tempCam.quaternion.y, 
+                 z: tempCam.quaternion.z, 
+                 w: tempCam.quaternion.w, 
+                 duration: duration, 
+                 ease: ease 
+             }, 0);
         }
 
         function setupDoubleClickReset() {
@@ -497,8 +518,11 @@
                     const camRight = new THREE.Vector3(); camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); 
                     camera.position.addScaledVector(camDir, -velocity.z * delta); camera.position.addScaledVector(camRight, -velocity.x * delta);
                     
-                    camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
-                    camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
+                    // === 关键：仅在不复位时应用手动控制 ===
+                    if (!isResetting) {
+                        camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
+                        camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
+                    }
                 }
                 checkCollision(); 
             }
