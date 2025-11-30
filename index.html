@@ -29,25 +29,28 @@
 
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
         
+        /* === 修改 1: 位置互换 === */
+        
+        /* 时钟：移到上方 (Bottom 50px) */
+        #realtime-clock {
+            position: absolute; bottom: 50px; width: 100%; text-align: center;
+            color: #333; 
+            font-size: 12px; 
+            font-weight: 400;
+            font-family: 'Courier New', Courier, monospace; 
+            z-index: 999; pointer-events: none;
+            opacity: 0; transition: opacity 1.0s;
+            letter-spacing: 6px; 
+            transform: scaleX(1.1); 
+            font-variant-numeric: tabular-nums; 
+        }
+
+        /* 操作提示：移到最下方 (Bottom 20px) */
         #instruction { 
-            position: absolute; bottom: 60px; width: 100%; text-align: center; 
+            position: absolute; bottom: 20px; width: 100%; text-align: center; 
             color: #ccc; font-size: 9px; 
             z-index: 999; pointer-events: none; 
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
-        }
-
-        /* === 修改 1: 打字机字体 + 原始格式 + 宽间距 === */
-        #realtime-clock {
-            position: absolute; bottom: 20px; width: 100%; text-align: center;
-            color: #333; /* 稍微深一点，配合打字机风格 */
-            font-size: 12px; 
-            font-weight: 400;
-            font-family: 'Courier New', Courier, monospace; /* 打字机字体 */
-            z-index: 999; pointer-events: none;
-            opacity: 0; transition: opacity 1.0s;
-            letter-spacing: 6px; /* 保持宽间距 */
-            transform: scaleX(1.1); /* 保持拉伸感 */
-            font-variant-numeric: tabular-nums; 
         }
 
         #joystick-zone {
@@ -87,10 +90,9 @@
     <div id="intro-overlay"><div id="loading-msg">ENTERING...</div></div>
     <div id="click-capture"></div>
     
+    <div id="realtime-clock">0000-00-00 00:00:00</div>
     <div id="instruction">Click to Start | WASD to Move | Double Click to Reset</div>
     
-    <div id="realtime-clock">0000-00-00 00:00:00</div>
-
     <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
 
     <script type="module">
@@ -201,7 +203,6 @@
             else loadDefaultSculpture();
         }
 
-        // === 修改 1: 格式改回 年-月-日 时:分:秒 ===
         function startClock() {
             function update() {
                 const now = new Date();
@@ -211,7 +212,6 @@
                 const h = String(now.getHours()).padStart(2, '0');
                 const min = String(now.getMinutes()).padStart(2, '0');
                 const s = String(now.getSeconds()).padStart(2, '0');
-                
                 clockDiv.innerText = `${y}-${m}-${d} ${h}:${min}:${s}`;
             }
             update();
@@ -291,40 +291,43 @@
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
+
+            // === 修改 2: 画布 1024x1024，字号全面放大 ===
             const canvas = document.createElement('canvas');
-            canvas.width = 2048; canvas.height = 2048; 
+            canvas.width = 1024; canvas.height = 1024; 
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
+            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 1024, 1024);
             ctx.textAlign = 'left';
             
-            // === 修改 2: 字体颜色加深，确保清晰可见 ===
-            ctx.font = 'bold 60px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; // 顶部小字加深
-            ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
+            // "EXHIBITION OF THE DAY" 放大
+            ctx.font = 'bold 50px Helvetica, Arial'; 
+            ctx.fillStyle = '#333333'; 
+            ctx.fillText("EXHIBITION OF THE DAY", 60, 100);
 
-            ctx.font = 'bold 160px Helvetica, Arial'; 
+            // 标题 (特大)
+            ctx.font = 'bold 120px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 120, 420);
+            ctx.fillText(systematicName, 60, 300);
 
-            ctx.font = 'bold 100px Helvetica, Arial'; 
+            // 正文 (加粗, 放大)
+            ctx.font = 'bold 80px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(mockYear, 120, 650);
             
-            ctx.fillText(randMat, 120, 950);
-
-            ctx.fillText(sizeInfo, 120, 1100);
+            ctx.fillText(mockYear, 60, 500);
+            ctx.fillText(randMat, 60, 650);
+            ctx.fillText(sizeInfo, 60, 800);
             
-            // 底部Credit
-            ctx.font = 'bold 60px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; // 底部加深
-            ctx.fillText("Courtesy of the Digital Archive", 120, 1800);
+            // 底部 (放大)
+            ctx.font = 'bold 40px Helvetica, Arial'; 
+            ctx.fillStyle = '#333333'; 
+            ctx.fillText("Courtesy of the Digital Archive", 60, 960);
 
-            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 40; ctx.strokeRect(0, 0, 2048, 2048);
+            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 1024, 1024);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             
-            // === 修改 3: 展签尺寸缩小回 0.4 ===
+            // === 修改 3: 展签尺寸恢复 0.4 ===
             const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
             const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.8 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
