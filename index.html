@@ -46,21 +46,8 @@
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
-        /* 移动端适配 */
-        @media (max-width: 768px) {
-            #joystick-zone { display: block; }
-            #instruction { 
-                font-size: 8px; 
-                letter-spacing: 0.5px; 
-                width: 96%; left: 2%; 
-                white-space: nowrap; 
-            }
-            .desktop-text { display: none; }
-            .mobile-text { display: inline; }
-        }
-
-        .desktop-text { display: inline; }
         .mobile-text { display: none; }
+        .desktop-text { display: inline; }
 
         #joystick-zone {
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
@@ -78,6 +65,19 @@
             transition: transform 0.1s;
         }
         .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
+
+        @media (max-width: 768px) {
+            #joystick-zone { display: block; }
+            
+            #instruction { 
+                font-size: 8px; 
+                letter-spacing: 0.5px; 
+                width: 96%; left: 2%; 
+                white-space: nowrap; 
+            }
+            .desktop-text { display: none; }
+            .mobile-text { display: inline; }
+        }
     </style>
     
     <script type="importmap">
@@ -311,51 +311,45 @@
             const randMat = materials[Math.floor(Math.random() * materials.length)];
 
             const canvas = document.createElement('canvas');
+            // === 关键修改：保持2048高清分辨率 ===
             canvas.width = 2048; canvas.height = 2048; 
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 修改：大字号，加粗，纯黑 ===
+            // === 关键修改：字号回归精致小巧，颜色全部纯黑(#000000) ===
             
-            // 顶部小字 (放大)
-            ctx.font = 'bold 60px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; 
-            ctx.fillText("EXHIBITION OF THE DAY", 100, 140);
-
-            // 标题 (巨大)
-            ctx.font = 'bold 150px Helvetica, Arial'; 
+            // 顶部小字
+            ctx.font = 'bold 50px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 100, 400);
+            ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
 
-            // 正文 (巨大)
-            ctx.font = 'bold 90px Helvetica, Arial'; 
+            // 标题
+            ctx.font = 'bold 140px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; 
+            ctx.fillText(systematicName, 120, 400);
+
+            // 正文
+            ctx.font = 'bold 80px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
-            ctx.fillText(mockYear, 100, 600);
-            ctx.fillText(randMat, 100, 750);
-            ctx.fillText(sizeInfo, 100, 900);
+            ctx.fillText(mockYear, 120, 600);
+            ctx.fillText(randMat, 120, 750);
+            ctx.fillText(sizeInfo, 120, 900);
             
-            // 底部 (放大)
-            ctx.font = 'bold 60px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; 
-            ctx.fillText("Courtesy of the Digital Archive", 100, 1800);
+            // 底部
+            ctx.font = 'bold 50px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; 
+            ctx.fillText("Courtesy of the Digital Archive", 120, 1800);
 
             ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 2048, 2048);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             
-            // 几何体保持 0.4m
             const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
-            
-            // === 修改：材质全哑光，防止反光泛白 ===
-            const labelMat = new THREE.MeshStandardMaterial({ 
-                map: texture, 
-                color: 0xffffff, 
-                roughness: 1.0, // 全粗糙
-                metalness: 0.0  // 非金属
-            });
+            // 保持全哑光材质，防止反光
+            const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 1.0, metalness: 0.0 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
             mesh.castShadow = true; mesh.receiveShadow = true;
             return mesh;
