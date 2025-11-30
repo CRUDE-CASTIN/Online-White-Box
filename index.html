@@ -19,7 +19,6 @@
             pointer-events: none; 
             display: flex; justify-content: center; align-items: center;
             opacity: 1; 
-            /* === 修复核心：移除了这里的 transition，避免与 JS 动画冲突 === */
         }
 
         #loading-msg {
@@ -234,26 +233,85 @@
             revealScene();
         }
 
+        // === 新功能：程序化艺术命名系统 ===
+        function generateArtisticName(seed) {
+            // 艺术词汇库 (Adjectives + Nouns)
+            const adj = [
+                "Silent", "Ethereal", "Broken", "Liquid", "Abstract", "Golden", "Hollow", 
+                "Deep", "Frozen", "Digital", "Lost", "Resonant", "White", "Infinite", "Kinetic",
+                "Transient", "Floating", "Forgotten", "Sacred", "Inner", "Outer", "Violent"
+            ];
+            const nouns = [
+                "Fragment", "Echo", "Void", "Memory", "Structure", "Form", "Horizon", 
+                "Obelisk", "Artifact", "Vision", "Sequence", "Moment", "Silence", "Current",
+                "Dream", "State", "Matter", "Reflection", "Glitch", "Entity", "Phase"
+            ];
+
+            // 简单的哈希函数：将字符串转为数字
+            let hash = 0;
+            if (seed.length === 0) return "Untitled Form";
+            for (let i = 0; i < seed.length; i++) {
+                hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+                hash |= 0; 
+            }
+            hash = Math.abs(hash);
+
+            // 确定性地选择词汇
+            const adjIndex = hash % adj.length;
+            const nounIndex = (hash >> 3) % nouns.length; // 位移一下避免相关性
+            const numSuffix = (hash % 100) < 30 ? ` No.${(hash % 20) + 1}` : ""; // 30% 概率有编号
+
+            return `${adj[adjIndex]} ${nouns[nounIndex]}${numSuffix}`;
+        }
+
         function createMuseumLabel(modelName, sizeInfo) {
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; }
+
+            // 1. 使用生成器获取新名字
+            const artisticName = generateArtisticName(modelName);
+            
+            // 随机其他信息 (Mock)
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
-            const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media"];
+            const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
-            const cleanName = modelName.replace(".glb", "").replace(/^\d+_/, "").replace(/_/g, " ");
 
             const canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 512; 
             const ctx = canvas.getContext('2d');
             
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 512, 512);
-            ctx.fillStyle = '#111'; ctx.textAlign = 'left';
+            ctx.textAlign = 'left';
             
-            ctx.font = 'bold 50px Helvetica, Arial'; ctx.fillText(cleanName, 40, 80);
-            ctx.font = '36px Helvetica, Arial'; ctx.fillStyle = '#666'; ctx.fillText(mockYear, 40, 140);
-            ctx.font = '30px Helvetica, Arial'; ctx.fillStyle = '#333'; ctx.fillText(randMat, 40, 260);
-            ctx.font = '24px Helvetica, Arial'; ctx.fillStyle = '#555'; ctx.fillText(sizeInfo, 40, 310);
-            ctx.font = '20px Helvetica, Arial'; ctx.fillStyle = '#999'; ctx.fillText("Courtesy of the Digital Archive", 40, 460);
-            ctx.strokeStyle = '#ddd'; ctx.lineWidth = 8; ctx.strokeRect(0, 0, 512, 512);
+            // === 修改点：加深字体颜色 ===
+            // 标题
+            ctx.font = 'bold 50px Helvetica, Arial'; 
+            ctx.fillStyle = '#000000'; // 纯黑
+            ctx.fillText(artisticName, 40, 80);
+
+            // 年份
+            ctx.font = '36px Helvetica, Arial'; 
+            ctx.fillStyle = '#222222'; // 深灰
+            ctx.fillText(mockYear, 40, 140);
+
+            // 材质
+            ctx.font = '30px Helvetica, Arial'; 
+            ctx.fillStyle = '#333333'; 
+            ctx.fillText(randMat, 40, 260);
+
+            // 尺寸
+            ctx.font = '24px Helvetica, Arial'; 
+            ctx.fillStyle = '#444444'; 
+            ctx.fillText(sizeInfo, 40, 310);
+            
+            // Credit
+            ctx.font = '20px Helvetica, Arial'; 
+            ctx.fillStyle = '#666666'; 
+            ctx.fillText("Courtesy of the Digital Archive", 40, 460);
+
+            // 边框
+            ctx.strokeStyle = '#cccccc'; 
+            ctx.lineWidth = 10; 
+            ctx.strokeRect(0, 0, 512, 512);
 
             const texture = new THREE.CanvasTexture(canvas);
             const labelGeo = new THREE.BoxGeometry(0.3, 0.015, 0.3); 
@@ -332,6 +390,8 @@
             sculptureWrapper.rotation.y = 0; 
 
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
+            
+            // 传入原始文件名，生成新名字
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
             
             const wrapperZ = targetPosition.z;
@@ -346,12 +406,11 @@
             isModelLoaded = true;
         }
 
-        // === 修复: 移除CSS transition，使用纯GSAP ===
         function revealScene() {
             setTimeout(() => {
                 gsap.to(introOverlayDiv, { 
                     opacity: 0, 
-                    duration: 2.0, // 稍微加长一点时间，更优雅
+                    duration: 2.0, 
                     ease: "power2.inOut", 
                     onComplete: () => { 
                         introOverlayDiv.style.display = 'none'; 
