@@ -107,6 +107,9 @@
         let labelMesh; 
         let colliderRadius = 0.1; 
         const targetPosition = new THREE.Vector3(0, 0, -6);
+        // === 修改 1: 定义桌面和移动端的不同初始位置 ===
+        const DESKTOP_CAM_POS = new THREE.Vector3(0, 1.7, 8); // 桌面端退后到 8
+        const MOBILE_CAM_POS = new THREE.Vector3(0, 1.7, 14);  // 移动端退后到 14，确保左右不切边
         let isModelLoaded = false;
         
         const clickCaptureDiv = document.getElementById('click-capture');
@@ -125,7 +128,18 @@
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xffffff);
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 1.7, 4); 
+            
+            // === 修改 2: 根据屏幕比例智能选择初始位置 ===
+            if (window.innerWidth < window.innerHeight) {
+                // 竖屏 (手机)
+                camera.position.copy(MOBILE_CAM_POS);
+            } else {
+                // 横屏 (桌面)
+                camera.position.copy(DESKTOP_CAM_POS);
+            }
+            // 确保初始就看向雕塑中心
+            camera.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
+
             camera.rotation.order = 'YXZ'; 
 
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0xeeeeee, 1.2); hemiLight.position.set(0, 20, 0); scene.add(hemiLight);
@@ -163,43 +177,32 @@
             else loadDefaultSculpture();
         }
 
-        // === 修改 2 & 3: 优先检查置顶，否则去重随机 ===
         async function checkPinAndLoad() {
             try {
-                // 1. 先查有没有置顶的
                 const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
                 const pinSnapshot = await getDocs(pinQuery);
 
                 if (!pinSnapshot.empty) {
-                    // 有置顶，直接加载第一个
                     const pinDoc = pinSnapshot.docs[0].data();
                     console.log("Loading pinned model:", pinDoc.name);
-                    loadModelFromUrl(pinDoc.url, pinDoc.name, pinDoc.name); // Pass original name for ID check? No, name is fine
+                    loadModelFromUrl(pinDoc.url, pinDoc.name);
                     return;
                 }
 
-                // 2. 没有置顶，走随机逻辑
                 const q = query(collection(db, "model_library"), where("active", "==", true));
                 const querySnapshot = await getDocs(q);
                 let models = [];
-                querySnapshot.forEach((doc) => {
-                    // 我们把 Doc ID 也存进去，用于去重
-                    models.push({ id: doc.id, ...doc.data() });
-                });
+                querySnapshot.forEach((doc) => { models.push({ id: doc.id, ...doc.data() }); });
 
                 if (models.length === 0) { loadDefaultSculpture(); return; }
 
-                // 3. 去重逻辑
                 const lastModelId = localStorage.getItem('last_model_id');
-                // 如果模型库大于1个，则过滤掉上次那个
                 if (models.length > 1 && lastModelId) {
                     models = models.filter(m => m.id !== lastModelId);
                 }
 
                 const index = Math.floor(Math.random() * models.length);
                 const selected = models[index];
-                
-                // 记录这次的 ID
                 localStorage.setItem('last_model_id', selected.id);
                 
                 console.log(`Loading random model: ${selected.name}`);
@@ -277,7 +280,6 @@
             return mesh;
         }
 
-        // === 修改 1: 修复虚高检测算法 ===
         function getSolidHeight(model, boxHeight) {
             const yCoords = [];
             model.traverse((child) => {
@@ -298,8 +300,6 @@
             const minY = yCoords[trimStart] || yCoords[0];
             const maxY = yCoords[trimEnd] || yCoords[yCoords.length - 1];
             let solidH = maxY - minY;
-            
-            // 安全锁：如果计算出的实心高度太小（比如只有包围盒的20%），则认为算法失效，回退到包围盒高度
             if (solidH < boxHeight * 0.2) {
                 return boxHeight;
             }
@@ -325,11 +325,9 @@
             rawModel.rotation.set(0,0,0);
             rawModel.updateMatrixWorld(true);
 
-            // 先算 Box
             const initialBox = new THREE.Box3().setFromObject(rawModel);
             const initialSize = initialBox.getSize(new THREE.Vector3());
 
-            // 传入 Box Height 作为参考
             const solidHeight = getSolidHeight(rawModel, initialSize.y);
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
@@ -378,11 +376,16 @@
             }, 100);
         }
 
+        // === 修改 3: 复位时同样根据屏幕比例选择目标位置 ===
         function resetCamera(duration = 1.5, ease = "power2.inOut") {
              if (!isModelLoaded) return;
-             gsap.to(camera.position, { x: 0, y: 1.7, z: 4, duration: duration, ease: ease });
+             // 检测当前屏幕比例，决定复位到哪个位置
+             const destPos = (window.innerWidth < window.innerHeight) ? MOBILE_CAM_POS : DESKTOP_CAM_POS;
+             
+             gsap.to(camera.position, { x: destPos.x, y: destPos.y, z: destPos.z, duration: duration, ease: ease });
              const tempCam = camera.clone();
-             tempCam.position.set(0, 1.7, 4);
+             // 让临时相机也去到目标位置，计算看向目标的角度
+             tempCam.position.copy(destPos);
              tempCam.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
              gsap.to(camera.quaternion, { x: tempCam.quaternion.x, y: tempCam.quaternion.y, z: tempCam.quaternion.z, w: tempCam.quaternion.w, duration: duration, ease: ease });
         }
