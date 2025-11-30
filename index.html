@@ -233,44 +233,41 @@
             revealScene();
         }
 
-        // === 新功能：程序化艺术命名系统 ===
-        function generateArtisticName(seed) {
-            // 艺术词汇库 (Adjectives + Nouns)
-            const adj = [
-                "Silent", "Ethereal", "Broken", "Liquid", "Abstract", "Golden", "Hollow", 
-                "Deep", "Frozen", "Digital", "Lost", "Resonant", "White", "Infinite", "Kinetic",
-                "Transient", "Floating", "Forgotten", "Sacred", "Inner", "Outer", "Violent"
-            ];
-            const nouns = [
-                "Fragment", "Echo", "Void", "Memory", "Structure", "Form", "Horizon", 
-                "Obelisk", "Artifact", "Vision", "Sequence", "Moment", "Silence", "Current",
-                "Dream", "State", "Matter", "Reflection", "Glitch", "Entity", "Phase"
-            ];
-
-            // 简单的哈希函数：将字符串转为数字
+        // === 修改 1: 系统化/档案式命名生成器 ===
+        function generateSystematicName(seed) {
+            // 哈希函数
             let hash = 0;
-            if (seed.length === 0) return "Untitled Form";
+            if (!seed || seed.length === 0) return "NULL · 000 · Ø";
             for (let i = 0; i < seed.length; i++) {
                 hash = ((hash << 5) - hash) + seed.charCodeAt(i);
                 hash |= 0; 
             }
             hash = Math.abs(hash);
 
-            // 确定性地选择词汇
-            const adjIndex = hash % adj.length;
-            const nounIndex = (hash >> 3) % nouns.length; // 位移一下避免相关性
-            const numSuffix = (hash % 100) < 30 ? ` No.${(hash % 20) + 1}` : ""; // 30% 概率有编号
+            // 前缀库 (系统/档案风格)
+            const prefixes = ["OBJ", "ARCH", "SYS", "NODE", "DATA", "CORE", "FLUX", "VOID", "UNIT", "SPEC", "FORM"];
+            // 希腊字母/符号后缀
+            const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
 
-            return `${adj[adjIndex]} ${nouns[nounIndex]}${numSuffix}`;
+            // 确定性选择
+            const pIndex = hash % prefixes.length;
+            const sIndex = (hash >> 3) % symbols.length;
+            
+            // 生成中间的编号：字母+数字
+            const charCode = String.fromCharCode(65 + (hash % 26)); // A-Z
+            const num = (hash % 999).toString().padStart(3, '0'); // 001 - 999
+
+            // 格式：[前缀] · [字母][数字] · [符号]
+            // 例如：ARCH · X704 · Ø
+            return `${prefixes[pIndex]} · ${charCode}${num} · ${symbols[sIndex]}`;
         }
 
         function createMuseumLabel(modelName, sizeInfo) {
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; }
 
-            // 1. 使用生成器获取新名字
-            const artisticName = generateArtisticName(modelName);
+            // 使用新的命名逻辑
+            const systematicName = generateSystematicName(modelName);
             
-            // 随机其他信息 (Mock)
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
@@ -282,34 +279,35 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 512, 512);
             ctx.textAlign = 'left';
             
-            // === 修改点：加深字体颜色 ===
-            // 标题
+            // === 修改 2: 调整文字颜色对比度 ===
+            
+            // 标题 (主视觉)
             ctx.font = 'bold 50px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; // 纯黑
-            ctx.fillText(artisticName, 40, 80);
+            ctx.fillStyle = '#1a1a1a'; // 极深灰，接近黑但不死板
+            ctx.fillText(systematicName, 40, 80);
 
             // 年份
             ctx.font = '36px Helvetica, Arial'; 
-            ctx.fillStyle = '#222222'; // 深灰
+            ctx.fillStyle = '#333333'; // 深灰，清晰可见
             ctx.fillText(mockYear, 40, 140);
 
             // 材质
             ctx.font = '30px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; 
+            ctx.fillStyle = '#333333'; // 深灰
             ctx.fillText(randMat, 40, 260);
 
             // 尺寸
             ctx.font = '24px Helvetica, Arial'; 
-            ctx.fillStyle = '#444444'; 
+            ctx.fillStyle = '#333333'; // 深灰
             ctx.fillText(sizeInfo, 40, 310);
             
-            // Credit
+            // 底部 Credit (稍微浅一点，拉开层次)
             ctx.font = '20px Helvetica, Arial'; 
-            ctx.fillStyle = '#666666'; 
+            ctx.fillStyle = '#555555'; // 中灰
             ctx.fillText("Courtesy of the Digital Archive", 40, 460);
 
-            // 边框
-            ctx.strokeStyle = '#cccccc'; 
+            // 边框 (稍微深一点)
+            ctx.strokeStyle = '#bbbbbb'; 
             ctx.lineWidth = 10; 
             ctx.strokeRect(0, 0, 512, 512);
 
@@ -391,7 +389,7 @@
 
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
             
-            // 传入原始文件名，生成新名字
+            // 使用新逻辑命名
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
             
             const wrapperZ = targetPosition.z;
