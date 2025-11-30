@@ -36,17 +36,17 @@
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
-        /* === 修改 1: 当代艺术极简时钟 === */
+        /* === 修改 1: 打字机字体 + 原始格式 + 宽间距 === */
         #realtime-clock {
             position: absolute; bottom: 20px; width: 100%; text-align: center;
-            color: #aaaaaa; /* 改回浅灰，不抢眼 */
+            color: #333; /* 稍微深一点，配合打字机风格 */
             font-size: 12px; 
-            font-weight: 300; /* 极细字体 */
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-weight: 400;
+            font-family: 'Courier New', Courier, monospace; /* 打字机字体 */
             z-index: 999; pointer-events: none;
             opacity: 0; transition: opacity 1.0s;
-            letter-spacing: 8px; /* 极宽字间距 */
-            transform: scaleX(1.1); /* 横向拉伸，增加设计感 */
+            letter-spacing: 6px; /* 保持宽间距 */
+            transform: scaleX(1.1); /* 保持拉伸感 */
             font-variant-numeric: tabular-nums; 
         }
 
@@ -76,9 +76,9 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://esm.sh/three@0.160.0",
-                "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
-                "gsap": "https://esm.sh/gsap@3.12.5"
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
             }
         }
     </script>
@@ -89,7 +89,7 @@
     
     <div id="instruction">Click to Start | WASD to Move | Double Click to Reset</div>
     
-    <div id="realtime-clock">00:00:00</div>
+    <div id="realtime-clock">0000-00-00 00:00:00</div>
 
     <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
 
@@ -201,13 +201,18 @@
             else loadDefaultSculpture();
         }
 
+        // === 修改 1: 格式改回 年-月-日 时:分:秒 ===
         function startClock() {
             function update() {
                 const now = new Date();
-                // 极简风格： 11.30.2025 | 12:45:30
-                const date = now.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '.');
-                const time = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                clockDiv.innerText = `${date}  |  ${time}`;
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                const h = String(now.getHours()).padStart(2, '0');
+                const min = String(now.getMinutes()).padStart(2, '0');
+                const s = String(now.getSeconds()).padStart(2, '0');
+                
+                clockDiv.innerText = `${y}-${m}-${d} ${h}:${min}:${s}`;
             }
             update();
             setInterval(update, 1000);
@@ -286,26 +291,21 @@
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
-
-            // === 修改 2: 4K 展签贴图 + 字体加粗 + 尺寸增大 ===
             const canvas = document.createElement('canvas');
-            canvas.width = 2048; canvas.height = 2048; // 2K -> 4K 提升清晰度
+            canvas.width = 2048; canvas.height = 2048; 
             const ctx = canvas.getContext('2d');
-            
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // 顶部小字
+            // === 修改 2: 字体颜色加深，确保清晰可见 ===
             ctx.font = 'bold 60px Helvetica, Arial'; 
-            ctx.fillStyle = '#888888'; 
+            ctx.fillStyle = '#333333'; // 顶部小字加深
             ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
 
-            // 标题 (纯黑粗体)
             ctx.font = 'bold 160px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText(systematicName, 120, 420);
 
-            // 正文 (纯黑，全部 Bold)
             ctx.font = 'bold 100px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText(mockYear, 120, 650);
@@ -314,19 +314,18 @@
 
             ctx.fillText(sizeInfo, 120, 1100);
             
-            // 底部
+            // 底部Credit
             ctx.font = 'bold 60px Helvetica, Arial'; 
-            ctx.fillStyle = '#444444'; 
+            ctx.fillStyle = '#333333'; // 底部加深
             ctx.fillText("Courtesy of the Digital Archive", 120, 1800);
 
             ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 40; ctx.strokeRect(0, 0, 2048, 2048);
 
             const texture = new THREE.CanvasTexture(canvas);
-            // 开启各向异性过滤
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             
-            // 展签模型加大: 0.6m
-            const labelGeo = new THREE.BoxGeometry(0.6, 0.02, 0.6); 
+            // === 修改 3: 展签尺寸缩小回 0.4 ===
+            const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
             const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.8 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
             mesh.castShadow = true; mesh.receiveShadow = true;
@@ -392,15 +391,12 @@
             const initialBox = new THREE.Box3().setFromObject(rawModel);
             const initialSize = initialBox.getSize(new THREE.Vector3());
             const solidHeight = getSolidHeight(rawModel, initialSize.y);
-            
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
             rawModel.scale.setScalar(scaleFactor); rawModel.updateMatrixWorld(true);
-            
             const newBox = new THREE.Box3().setFromObject(rawModel);
             const newCenter = newBox.getCenter(new THREE.Vector3());
             const finalSize = newBox.getSize(new THREE.Vector3());
-            
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
             rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; 
             rawModel.position.y = -newBox.min.y; 
@@ -409,11 +405,7 @@
             forceGrounding(sculptureWrapper);
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
-            
-            // === 修改 3: 展签距离增加至 2.5m ===
-            const wrapperZ = targetPosition.z; 
-            const labelZ = wrapperZ + (finalSize.z / 2) + 2.5; 
-            
+            const wrapperZ = targetPosition.z; const labelZ = wrapperZ + (finalSize.z / 2) + 2.5; 
             labelMesh.position.set(0, 0.01, labelZ); labelMesh.rotation.x = 0; scene.add(labelMesh);
             colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.1; 
             isModelLoaded = true;
