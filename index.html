@@ -29,11 +29,21 @@
 
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
         
+        /* 操作提示：往上挪一点，给时钟腾位置 */
         #instruction { 
-            position: absolute; bottom: 30px; width: 100%; text-align: center; 
+            position: absolute; bottom: 50px; width: 100%; text-align: center; 
             color: #bbb; font-size: 10px; 
             z-index: 999; pointer-events: none; 
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
+        }
+
+        /* === 新增：实时时钟 === */
+        #realtime-clock {
+            position: absolute; bottom: 20px; width: 100%; text-align: center;
+            color: #999; font-size: 12px; font-family: 'Courier New', Courier, monospace; /* 等宽字体 */
+            z-index: 999; pointer-events: none;
+            opacity: 0; transition: opacity 1.0s;
+            letter-spacing: 2px;
         }
 
         #joystick-zone {
@@ -54,7 +64,7 @@
         .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
 
         @media (max-width: 768px) {
-            #instruction { display: none; }
+            #instruction { display: none; } /* 移动端隐藏操作提示，但显示时钟 */
             #joystick-zone { display: block; }
         }
     </style>
@@ -62,9 +72,9 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
+                "three": "https://esm.sh/three@0.160.0",
+                "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
+                "gsap": "https://esm.sh/gsap@3.12.5"
             }
         }
     </script>
@@ -72,7 +82,11 @@
 <body>
     <div id="intro-overlay"><div id="loading-msg">ENTERING...</div></div>
     <div id="click-capture"></div>
+    
     <div id="instruction">Click to Start | WASD to Move | Double Click to Reset</div>
+    
+    <div id="realtime-clock">0000-00-00 00:00:00</div>
+
     <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
 
     <script type="module">
@@ -117,6 +131,7 @@
         const clickCaptureDiv = document.getElementById('click-capture');
         const introOverlayDiv = document.getElementById('intro-overlay');
         const instructionText = document.getElementById('instruction');
+        const clockDiv = document.getElementById('realtime-clock'); // 获取时钟元素
 
         let joystickVector = { x: 0, y: 0 }; 
         let lookTouchId = null;
@@ -126,6 +141,7 @@
 
         init();
         animate();
+        startClock(); // 启动时钟
 
         function init() {
             scene = new THREE.Scene();
@@ -148,6 +164,7 @@
             keyLight.shadow.mapSize.set(2048, 2048); 
             keyLight.shadow.bias = -0.0001; 
             keyLight.shadow.radius = 60; 
+            
             const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
             scene.add(keyLight);
             
@@ -179,6 +196,25 @@
 
             if(db) checkPinAndLoad(); 
             else loadDefaultSculpture();
+        }
+
+        // === 新增：实时时钟逻辑 ===
+        function startClock() {
+            function update() {
+                const now = new Date();
+                // 格式化：YYYY-MM-DD HH:MM:SS
+                // 使用 padStart 补零
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                const h = String(now.getHours()).padStart(2, '0');
+                const min = String(now.getMinutes()).padStart(2, '0');
+                const s = String(now.getSeconds()).padStart(2, '0');
+                
+                clockDiv.innerText = `${y}-${m}-${d} ${h}:${min}:${s}`;
+            }
+            update();
+            setInterval(update, 1000);
         }
 
         async function checkPinAndLoad() {
@@ -224,21 +260,17 @@
             revealScene();
         }
 
-        // === 核心逻辑：一致性艺术数据生成器 ===
-        function getArtData(seed) {
+        function generateSystematicName(seed) {
             let hash = 0;
-            if (!seed || seed.length === 0) return { title: "NULL · 000 · Ø", year: 2024, material: "Unknown" };
+            if (!seed || seed.length === 0) return "NULL · 000 · Ø";
             for (let i = 0; i < seed.length; i++) { hash = ((hash << 5) - hash) + seed.charCodeAt(i); hash |= 0; }
             hash = Math.abs(hash);
-            
             const rng = (s) => {
                 let t = s + 0x6D2B79F5;
                 t = Math.imul(t ^ (t >>> 15), t | 1);
                 t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
                 return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
             }
-            
-            // 1. 生成 Title
             const rand = rng(hash);
             let prefix = "";
             const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -249,59 +281,39 @@
             const num = Math.floor(rng(hash + 99) * 1000).toString().padStart(3, '0'); 
             const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
             const sIndex = Math.floor(rng(hash + 77) * symbols.length);
-            const title = `${prefix} · ${num} · ${symbols[sIndex]}`;
-
-            // 2. 生成 Year
-            const year = Math.floor(rng(hash + 123) * (2025 - 1980 + 1)) + 1980;
-
-            // 3. 生成 Material (天马行空版)
-            const rawMats = ["Bronze", "Marble", "Steel", "Resin", "Concrete", "Glass", "Silicon", "Carbon Fiber", "Gold Leaf"];
-            const wildMats = ["Liquid Light", "Solidified Smoke", "Aerogel", "Metallic Hydrogen", "Quantum Foam", "Corrupted Data", "Lunar Dust", "Haptic Feedback", "Neural Network Weights"];
-            const concepts = ["Time", "Silence", "Gravity", "Memory", "Void", "Echoes", "Entropy"];
-            
-            let material = "";
-            const matType = rng(hash + 55); 
-
-            if (matType < 0.3) {
-                const idx = Math.floor(rng(hash + 1) * wildMats.length);
-                material = wildMats[idx];
-            } else if (matType < 0.6) {
-                const m1 = rawMats[Math.floor(rng(hash + 2) * rawMats.length)];
-                const m2 = wildMats[Math.floor(rng(hash + 3) * wildMats.length)];
-                material = `${m1} & ${m2}`;
-            } else if (matType < 0.8) {
-                const c = concepts[Math.floor(rng(hash + 4) * concepts.length)];
-                material = `Compressed ${c}`;
-            } else {
-                const m1 = rawMats[Math.floor(rng(hash + 5) * rawMats.length)];
-                material = `Polished ${m1} encased in Vacuum`;
-            }
-
-            return { title, year, material };
+            return `${prefix} · ${num} · ${symbols[sIndex]}`;
         }
 
         function createMuseumLabel(modelName, sizeInfo) {
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; }
-
-            const artInfo = getArtData(modelName);
-
+            const systematicName = generateSystematicName(modelName);
+            const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
+            const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
+            const randMat = materials[Math.floor(Math.random() * materials.length)];
             const canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 512; 
             const ctx = canvas.getContext('2d');
+            
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 512, 512);
             ctx.textAlign = 'left';
             
-            // 绘制内容 (使用生成的数据)
-            ctx.font = 'bold 50px Helvetica, Arial'; ctx.fillStyle = '#1a1a1a'; ctx.fillText(artInfo.title, 40, 80);
-            ctx.font = '36px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(artInfo.year, 40, 140);
-            ctx.font = '30px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(artInfo.material, 40, 260);
-            ctx.font = '24px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(sizeInfo, 40, 310);
-            
+            // === 修改点 2: 增加顶部标题 "EXHIBITION OF THE DAY" ===
+            ctx.font = '24px Helvetica, Arial'; 
+            ctx.fillStyle = '#888888'; 
+            ctx.fillText("EXHIBITION OF THE DAY", 40, 50); // 顶部小字
+
+            // 其他内容下移
+            ctx.font = 'bold 48px Helvetica, Arial'; ctx.fillStyle = '#1a1a1a'; ctx.fillText(systematicName, 40, 110);
+            ctx.font = '36px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(mockYear, 40, 170);
+            ctx.font = '30px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(randMat, 40, 270);
+            ctx.font = '24px Helvetica, Arial'; ctx.fillStyle = '#000000'; ctx.fillText(sizeInfo, 40, 320);
             ctx.font = '20px Helvetica, Arial'; ctx.fillStyle = '#333333'; ctx.fillText("Courtesy of the Digital Archive", 40, 460);
-            ctx.strokeStyle = '#999999'; ctx.lineWidth = 10; ctx.strokeRect(0, 0, 512, 512);
             
+            ctx.strokeStyle = '#999999'; ctx.lineWidth = 10; ctx.strokeRect(0, 0, 512, 512);
             const texture = new THREE.CanvasTexture(canvas);
-            const labelGeo = new THREE.BoxGeometry(0.3, 0.015, 0.3); 
+            
+            // === 修改点 3: 展签尺寸变大 ===
+            const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
             const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.8 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
             mesh.castShadow = true; mesh.receiveShadow = true;
@@ -364,15 +376,19 @@
                 }
             });
             rawModel.position.set(0,0,0); rawModel.scale.set(1,1,1); rawModel.rotation.set(0,0,0); rawModel.updateMatrixWorld(true);
+            
             const initialBox = new THREE.Box3().setFromObject(rawModel);
             const initialSize = initialBox.getSize(new THREE.Vector3());
             const solidHeight = getSolidHeight(rawModel, initialSize.y);
+            
             const targetHeight = 3.5;
             const scaleFactor = targetHeight / solidHeight;
             rawModel.scale.setScalar(scaleFactor); rawModel.updateMatrixWorld(true);
+            
             const newBox = new THREE.Box3().setFromObject(rawModel);
             const newCenter = newBox.getCenter(new THREE.Vector3());
             const finalSize = newBox.getSize(new THREE.Vector3());
+            
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
             rawModel.position.x = -newCenter.x; rawModel.position.z = -newCenter.z; 
             rawModel.position.y = -newBox.min.y; 
@@ -394,7 +410,7 @@
                         introOverlayDiv.style.display = 'none'; 
                         clickCaptureDiv.style.display = 'block'; 
                         instructionText.style.opacity = '1';
-                        // 修复 2: 强制重置所有运动状态，防止漂移
+                        clockDiv.style.opacity = '1'; // 显示时钟
                         resetMovementState();
                         isIntroFinished = true; 
                     }
