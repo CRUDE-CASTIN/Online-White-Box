@@ -233,9 +233,7 @@
             revealScene();
         }
 
-        // === 修改 1: 系统化/档案式命名生成器 ===
         function generateSystematicName(seed) {
-            // 哈希函数
             let hash = 0;
             if (!seed || seed.length === 0) return "NULL · 000 · Ø";
             for (let i = 0; i < seed.length; i++) {
@@ -244,30 +242,21 @@
             }
             hash = Math.abs(hash);
 
-            // 前缀库 (系统/档案风格)
             const prefixes = ["OBJ", "ARCH", "SYS", "NODE", "DATA", "CORE", "FLUX", "VOID", "UNIT", "SPEC", "FORM"];
-            // 希腊字母/符号后缀
             const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
 
-            // 确定性选择
             const pIndex = hash % prefixes.length;
             const sIndex = (hash >> 3) % symbols.length;
-            
-            // 生成中间的编号：字母+数字
-            const charCode = String.fromCharCode(65 + (hash % 26)); // A-Z
-            const num = (hash % 999).toString().padStart(3, '0'); // 001 - 999
+            const charCode = String.fromCharCode(65 + (hash % 26)); 
+            const num = (hash % 999).toString().padStart(3, '0'); 
 
-            // 格式：[前缀] · [字母][数字] · [符号]
-            // 例如：ARCH · X704 · Ø
             return `${prefixes[pIndex]} · ${charCode}${num} · ${symbols[sIndex]}`;
         }
 
         function createMuseumLabel(modelName, sizeInfo) {
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; }
 
-            // 使用新的命名逻辑
             const systematicName = generateSystematicName(modelName);
-            
             const mockYear = Math.floor(Math.random() * (2025 - 2000 + 1)) + 2000;
             const materials = ["Bronze, Patina", "Polished Steel", "Marble", "Digital Polymer", "Mixed Media", "Resin", "Ceramic"];
             const randMat = materials[Math.floor(Math.random() * materials.length)];
@@ -279,35 +268,35 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 512, 512);
             ctx.textAlign = 'left';
             
-            // === 修改 2: 调整文字颜色对比度 ===
+            // === 修改：字体颜色全面加深 ===
             
-            // 标题 (主视觉)
+            // 标题 (纯黑)
             ctx.font = 'bold 50px Helvetica, Arial'; 
-            ctx.fillStyle = '#1a1a1a'; // 极深灰，接近黑但不死板
+            ctx.fillStyle = '#000000'; 
             ctx.fillText(systematicName, 40, 80);
 
-            // 年份
+            // 年份 (纯黑)
             ctx.font = '36px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; // 深灰，清晰可见
+            ctx.fillStyle = '#000000'; 
             ctx.fillText(mockYear, 40, 140);
 
-            // 材质
+            // 材质 (纯黑)
             ctx.font = '30px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; // 深灰
+            ctx.fillStyle = '#000000'; 
             ctx.fillText(randMat, 40, 260);
 
-            // 尺寸
+            // 尺寸 (纯黑)
             ctx.font = '24px Helvetica, Arial'; 
-            ctx.fillStyle = '#333333'; // 深灰
+            ctx.fillStyle = '#000000'; 
             ctx.fillText(sizeInfo, 40, 310);
             
-            // 底部 Credit (稍微浅一点，拉开层次)
+            // Credit (深灰)
             ctx.font = '20px Helvetica, Arial'; 
-            ctx.fillStyle = '#555555'; // 中灰
+            ctx.fillStyle = '#333333'; 
             ctx.fillText("Courtesy of the Digital Archive", 40, 460);
 
-            // 边框 (稍微深一点)
-            ctx.strokeStyle = '#bbbbbb'; 
+            // 边框 (加深)
+            ctx.strokeStyle = '#999999'; 
             ctx.lineWidth = 10; 
             ctx.strokeRect(0, 0, 512, 512);
 
@@ -388,8 +377,6 @@
             sculptureWrapper.rotation.y = 0; 
 
             const formattedSize = `${(finalSize.x).toFixed(1)}m x ${(finalSize.y).toFixed(1)}m x ${(finalSize.z).toFixed(1)}m`;
-            
-            // 使用新逻辑命名
             labelMesh = createMuseumLabel(rawName || "Untitled", formattedSize);
             
             const wrapperZ = targetPosition.z;
