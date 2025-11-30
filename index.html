@@ -49,9 +49,10 @@
         .mobile-text { display: none; }
         .desktop-text { display: inline; }
 
+        /* === 修改 2: 缩小摇杆判定范围 160px -> 120px === */
         #joystick-zone {
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
-            width: 160px; height: 160px; 
+            width: 120px; height: 120px; 
             z-index: 1500; display: none;
         }
         .joystick-base { width: 100%; height: 100%; background: transparent; border: none; position: relative; }
@@ -159,7 +160,8 @@
         let targetFOV = DEFAULT_FOV; 
         let pinchStartDist = 0; 
         let pinchStartFOV = DEFAULT_FOV;
-        let isZooming = false; 
+        let isZooming = false;
+        let isZoomCooldown = false; // === 新增：变焦冷却锁 ===
 
         init();
         animate();
@@ -316,32 +318,26 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 修改点：字号保持巨大，颜色强制纯黑 ===
-            
-            // 顶部小字 (纯黑)
-            ctx.font = 'bold 60px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; 
+            ctx.font = 'bold 50px Helvetica, Arial'; 
+            ctx.fillStyle = '#333333'; 
             ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
 
-            // 标题 (纯黑)
-            ctx.font = 'bold 150px Helvetica, Arial'; 
+            ctx.font = 'bold 140px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText(systematicName, 120, 400);
 
-            // 正文 (纯黑)
-            ctx.font = 'bold 90px Helvetica, Arial'; 
+            ctx.font = 'bold 80px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
             ctx.fillText(mockYear, 120, 600);
             ctx.fillText(randMat, 120, 750);
             ctx.fillText(sizeInfo, 120, 900);
             
-            // 底部 (纯黑)
-            ctx.font = 'bold 60px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; 
+            ctx.font = 'bold 50px Helvetica, Arial'; 
+            ctx.fillStyle = '#333333'; 
             ctx.fillText("Courtesy of the Digital Archive", 120, 1800);
 
-            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 40; ctx.strokeRect(0, 0, 2048, 2048);
+            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 2048, 2048);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -508,8 +504,14 @@
 
             document.addEventListener('touchend', (e) => {
                 if (e.touches.length < 2) {
-                    isZooming = false; 
-                    targetFOV = DEFAULT_FOV; 
+                    // === 修改 1: 变焦结束触发冷却 ===
+                    if (isZooming) {
+                        isZooming = false;
+                        isZoomCooldown = true;
+                        lookTouchId = null; // 强制断开当前的旋转追踪
+                        setTimeout(() => { isZoomCooldown = false; }, 200); // 200ms 冷却
+                        targetFOV = DEFAULT_FOV; 
+                    }
                 }
             });
         }
@@ -578,7 +580,7 @@
 
             document.addEventListener('touchmove', (e) => {
                 if (!isIntroFinished) return;
-                if (isZooming) return; 
+                if (isZooming || isZoomCooldown) return; // 冷却期禁止旋转
 
                 let touch = null;
                 for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { touch = e.changedTouches[i]; break; } }
@@ -623,7 +625,11 @@
             if (isIntroFinished) { 
                 if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
                 
-                if (!isZooming && (joystickVector.x !== 0 || joystickVector.y !== 0)) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
+                if (!isZooming && (joystickVector.x !== 0 || joystickVector.y !== 0)) { 
+                    velocity.z -= -joystickVector.y * 80.0 * delta; 
+                    velocity.x -= joystickVector.x * 80.0 * delta; 
+                }
+                
                 if (controls.isLocked) { 
                     controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); 
                     targetRotationY = camera.rotation.y;
