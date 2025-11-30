@@ -6,7 +6,7 @@
     <title>White Void Gallery</title>
     
     <link rel="preconnect" href="https://esm.sh">
-    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://www.gstatic.com">
     <link rel="preconnect" href="https://firebasestorage.googleapis.com">
 
     <style>
@@ -45,6 +45,7 @@
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
+        /* 隐形极简摇杆 */
         #joystick-zone {
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
             width: 160px; height: 160px; 
@@ -62,8 +63,8 @@
         }
         .joystick-active .joystick-knob { background: rgba(0, 0, 0, 0.4); transform: translate(-50%, -50%) scale(1.1); }
 
+        /* 移动端媒体查询：显示摇杆 */
         @media (max-width: 768px) {
-            #instruction { display: none; }
             #joystick-zone { display: block; }
         }
     </style>
@@ -83,7 +84,6 @@
     <div id="click-capture"></div>
     
     <div id="realtime-clock">0000-00-00 00:00:00</div>
-    
     <div id="instruction">Click to Start | WASD to Move | Scroll to Zoom | Double Click to Reset</div>
     
     <div id="joystick-zone"><div class="joystick-base"><div class="joystick-knob" id="joystick-knob"></div></div></div>
@@ -132,15 +132,21 @@
         const instructionText = document.getElementById('instruction');
         const clockDiv = document.getElementById('realtime-clock');
 
+        // 交互状态变量
         let joystickVector = { x: 0, y: 0 }; 
+        let joystickTouchId = null; // 追踪摇杆的手指ID
         let lookTouchId = null;
         let lastLookX = 0; let lastLookY = 0;
         let lastTapTime = 0; let lastTapPos = { x: 0, y: 0 };
+        
         let targetRotationY = 0; let targetRotationX = 0;
 
+        // 变焦变量
         const DEFAULT_FOV = 70;
         let targetFOV = DEFAULT_FOV; 
         let pinchStartDist = 0; 
+        let pinchStartFOV = DEFAULT_FOV;
+        let isZooming = false; // 互斥锁
 
         init();
         animate();
@@ -151,8 +157,13 @@
             scene.background = new THREE.Color(0xffffff);
             camera = new THREE.PerspectiveCamera(DEFAULT_FOV, window.innerWidth / window.innerHeight, 0.1, 100);
             
-            if (window.innerWidth < window.innerHeight) { camera.position.copy(MOBILE_CAM_POS); } 
-            else { camera.position.copy(DESKTOP_CAM_POS); }
+            if (window.innerWidth < window.innerHeight) { 
+                camera.position.copy(MOBILE_CAM_POS); 
+                // === 修改 3: 移动端更新提示文字 ===
+                instructionText.innerText = "Joystick to Move | Drag to Look | Pinch to Zoom | Double Tap Reset";
+            } else { 
+                camera.position.copy(DESKTOP_CAM_POS); 
+            }
             camera.lookAt(targetPosition.x, targetPosition.y + 1.5, targetPosition.z);
             camera.rotation.order = 'YXZ'; 
             
@@ -292,32 +303,32 @@
             const randMat = materials[Math.floor(Math.random() * materials.length)];
 
             const canvas = document.createElement('canvas');
-            canvas.width = 2048; canvas.height = 2048; 
+            canvas.width = 1024; canvas.height = 1024; 
             const ctx = canvas.getContext('2d');
             
-            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
+            ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 1024, 1024);
             ctx.textAlign = 'left';
             
             ctx.font = 'bold 50px Helvetica, Arial'; 
             ctx.fillStyle = '#666666'; 
-            ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
+            ctx.fillText("EXHIBITION OF THE DAY", 60, 100);
 
-            ctx.font = 'bold 140px Helvetica, Arial'; 
+            ctx.font = 'bold 120px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 120, 400);
+            ctx.fillText(systematicName, 60, 300);
 
             ctx.font = 'bold 80px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
-            ctx.fillText(mockYear, 120, 600);
-            ctx.fillText(randMat, 120, 750);
-            ctx.fillText(sizeInfo, 120, 900);
+            ctx.fillText(mockYear, 60, 500);
+            ctx.fillText(randMat, 60, 650);
+            ctx.fillText(sizeInfo, 60, 800);
             
             ctx.font = 'bold 50px Helvetica, Arial'; 
             ctx.fillStyle = '#333333'; 
-            ctx.fillText("Courtesy of the Digital Archive", 120, 1800);
+            ctx.fillText("Courtesy of the Digital Archive", 60, 960);
 
-            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 2048, 2048);
+            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 1024, 1024);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -351,6 +362,12 @@
             let solidH = maxY - minY;
             if (solidH < boxHeight * 0.2) return boxHeight;
             return solidH;
+        }
+
+        function forceGrounding(wrapper) {
+            let minY = Infinity; wrapper.updateMatrixWorld(true);
+            wrapper.traverse((child) => { if (child.isMesh && child.geometry) { const pos = child.geometry.attributes.position; const v = new THREE.Vector3(); for (let i = 0; i < pos.count; i+=3) { v.fromBufferAttribute(pos, i); v.applyMatrix4(child.matrixWorld); if (v.y < minY) minY = v.y; } } });
+            if (minY !== Infinity && Math.abs(minY) > 0.001) { wrapper.position.y -= minY; }
         }
 
         function processAndPlaceModel(rawModel, rawName) {
@@ -387,12 +404,6 @@
             labelMesh.position.set(0, 0.01, labelZ); labelMesh.rotation.x = 0; scene.add(labelMesh);
             colliderRadius = Math.max(finalSize.x, finalSize.z) / 2 + 0.1; 
             isModelLoaded = true;
-        }
-
-        function forceGrounding(wrapper) {
-            let minY = Infinity; wrapper.updateMatrixWorld(true);
-            wrapper.traverse((child) => { if (child.isMesh && child.geometry) { const pos = child.geometry.attributes.position; const v = new THREE.Vector3(); for (let i = 0; i < pos.count; i+=3) { v.fromBufferAttribute(pos, i); v.applyMatrix4(child.matrixWorld); if (v.y < minY) minY = v.y; } } });
-            if (minY !== Infinity && Math.abs(minY) > 0.001) { wrapper.position.y -= minY; }
         }
 
         function revealScene() {
@@ -451,7 +462,9 @@
             }, { passive: false });
         }
 
+        // === 修改 1 & 2: 解决双指变焦冲突与速率问题 ===
         function setupZoomControls() {
+            // PC 滚轮
             document.addEventListener('wheel', (e) => {
                 if (!isIntroFinished || isResetting) return;
                 const sensitivity = 0.05;
@@ -459,29 +472,44 @@
                 targetFOV = THREE.MathUtils.clamp(targetFOV, 10, 90);
             }, { passive: true });
 
+            // 移动端双指
             document.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 2) {
+                    // 记录初始距离
                     const dx = e.touches[0].clientX - e.touches[1].clientX;
                     const dy = e.touches[0].clientY - e.touches[1].clientY;
                     pinchStartDist = Math.sqrt(dx*dx + dy*dy);
+                    // 记录初始FOV，基于它进行缩放，而不是基于每一帧
+                    pinchStartFOV = targetFOV; 
+                    isZooming = true; // 上锁
                 }
             }, { passive: false });
 
             document.addEventListener('touchmove', (e) => {
+                // 只有当双指且不在复位时才执行
                 if (e.touches.length === 2 && isIntroFinished && !isResetting) {
+                    e.preventDefault(); // 阻止浏览器缩放
                     const dx = e.touches[0].clientX - e.touches[1].clientX;
                     const dy = e.touches[0].clientY - e.touches[1].clientY;
                     const dist = Math.sqrt(dx*dx + dy*dy);
-                    const zoomFactor = pinchStartDist / dist; 
-                    let newFov = targetFOV * zoomFactor;
-                    targetFOV += (newFov - targetFOV) * 0.2; 
+                    
+                    // 计算距离差
+                    const deltaDist = dist - pinchStartDist;
+                    
+                    // === 修改点：急速缩放算法 ===
+                    // 0.15 的系数意味着每张开 100px，FOV 减少 15度
+                    // 负号是因为：距离变大(张开) -> FOV变小(放大)
+                    targetFOV = pinchStartFOV - (deltaDist * 0.15);
                     targetFOV = THREE.MathUtils.clamp(targetFOV, 10, 90);
-                    pinchStartDist = dist; 
                 }
             }, { passive: false });
 
             document.addEventListener('touchend', (e) => {
-                if (e.touches.length < 2) { targetFOV = DEFAULT_FOV; }
+                // 如果手指少于2根，视为结束变焦
+                if (e.touches.length < 2) {
+                    isZooming = false; // 解锁
+                    targetFOV = DEFAULT_FOV; // 自动回弹
+                }
             });
         }
 
@@ -491,7 +519,8 @@
             const zoneRect = joystickZone.getBoundingClientRect();
             const center = { x: zoneRect.width / 2, y: zoneRect.height / 2 };
             const maxRadius = (zoneRect.width / 2) - 20;
-            let joystickTouchId = null;
+            // 这里的变量改成全局
+            // let joystickTouchId = null; 
 
             joystickZone.addEventListener('touchstart', (e) => {
                 if (!isIntroFinished) return; 
@@ -541,20 +570,32 @@
             document.addEventListener('touchstart', (e) => {
                 if (!isIntroFinished) return; 
                 if (e.target.closest('#joystick-zone')) return;
-                if (e.touches.length > 1) return; 
+                
+                // === 修改点：修复移动+旋转冲突 ===
+                // 只有当这根手指不是摇杆手指时，才允许作为旋转手指
                 const touch = e.changedTouches[0];
-                lookTouchId = touch.identifier;
-                lastLookX = touch.clientX; lastLookY = touch.clientY;
+                if (touch.identifier !== joystickTouchId) {
+                    lookTouchId = touch.identifier;
+                    lastLookX = touch.clientX; lastLookY = touch.clientY;
+                }
             }, {passive: false});
 
             document.addEventListener('touchmove', (e) => {
                 if (!isIntroFinished) return;
+                
+                // === 修改点：变焦时禁止旋转 ===
+                if (isZooming) return;
+
                 let touch = null;
-                for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { touch = e.changedTouches[i]; break; } }
+                for(let i=0; i<e.changedTouches.length; i++) { 
+                    if(e.changedTouches[i].identifier === lookTouchId) { touch = e.changedTouches[i]; break; } 
+                }
                 if (!touch) return;
+                
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
-                const sensitivity = 0.004; 
+                
+                const sensitivity = 0.01; // 灵敏度
                 targetRotationY -= deltaX * sensitivity;
                 targetRotationX -= deltaY * sensitivity;
                 targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
@@ -591,7 +632,12 @@
             
             if (isIntroFinished) { 
                 if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
-                if (joystickVector.x !== 0 || joystickVector.y !== 0) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
+                
+                // === 修改：摇杆输入仅在非变焦时生效 (虽然逻辑上不冲突，但安全起见) ===
+                if (!isZooming && (joystickVector.x !== 0 || joystickVector.y !== 0)) { 
+                    velocity.z -= -joystickVector.y * 80.0 * delta; 
+                    velocity.x -= joystickVector.x * 80.0 * delta; 
+                }
                 
                 if (controls.isLocked) { 
                     controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); 
@@ -601,6 +647,7 @@
                     const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize(); 
                     const camRight = new THREE.Vector3(); camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); 
                     camera.position.addScaledVector(camDir, -velocity.z * delta); camera.position.addScaledVector(camRight, -velocity.x * delta);
+                    
                     if (!isResetting) {
                         camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
                         camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
@@ -609,8 +656,9 @@
                 checkCollision(); 
             }
             
-            if (camera.fov !== targetFOV) {
-                camera.fov += (targetFOV - camera.fov) * 0.1; 
+            // === 平滑更新 FOV ===
+            if (Math.abs(camera.fov - targetFOV) > 0.01) {
+                camera.fov += (targetFOV - camera.fov) * 0.2; // 0.2 阻尼，快速响应
                 camera.updateProjectionMatrix();
             }
 
