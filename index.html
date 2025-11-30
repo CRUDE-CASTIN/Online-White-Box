@@ -160,7 +160,6 @@
         let pinchStartDist = 0; 
         let pinchStartFOV = DEFAULT_FOV;
         let isZooming = false; 
-        let isZoomCooldown = false;
 
         init();
         animate();
@@ -314,42 +313,40 @@
             const canvas = document.createElement('canvas');
             canvas.width = 2048; canvas.height = 2048; 
             const ctx = canvas.getContext('2d');
-            
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 核心修改：字号暴力拉大，颜色全黑 ===
+            // === 修改：在“精致版”基础上放大约25%，颜色纯黑 ===
             
-            // 顶部小字
-            ctx.font = 'bold 80px Helvetica, Arial'; 
+            // 顶部小字 (原50px -> 64px)
+            ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText("EXHIBITION OF THE DAY", 100, 140);
+            ctx.fillText("EXHIBITION OF THE DAY", 120, 180);
 
-            // 标题 (巨大)
-            ctx.font = 'bold 220px Helvetica, Arial'; 
+            // 标题 (原140px -> 176px)
+            ctx.font = 'bold 176px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 100, 450);
+            ctx.fillText(systematicName, 120, 420);
 
-            // 正文 (巨大)
-            ctx.font = 'bold 120px Helvetica, Arial'; 
+            // 正文 (原80px -> 100px)
+            ctx.font = 'bold 100px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
-            ctx.fillText(mockYear, 100, 750);
-            ctx.fillText(randMat, 100, 950);
-            ctx.fillText(sizeInfo, 100, 1150);
+            ctx.fillText(mockYear, 120, 650);
+            ctx.fillText(randMat, 120, 820);
+            ctx.fillText(sizeInfo, 120, 990);
             
-            // 底部 (放大)
-            ctx.font = 'bold 80px Helvetica, Arial'; 
+            // 底部 (原50px -> 64px)
+            ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText("Courtesy of the Digital Archive", 100, 1850);
+            ctx.fillText("Courtesy of the Digital Archive", 120, 1850);
 
-            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 50; ctx.strokeRect(0, 0, 2048, 2048);
+            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 2048, 2048);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             
             const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
-            // 全哑光，非金属
             const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 1.0, metalness: 0.0 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
             mesh.castShadow = true; mesh.receiveShadow = true;
@@ -511,13 +508,8 @@
 
             document.addEventListener('touchend', (e) => {
                 if (e.touches.length < 2) {
-                    if (isZooming) {
-                        isZooming = false;
-                        isZoomCooldown = true;
-                        lookTouchId = null; 
-                        setTimeout(() => { isZoomCooldown = false; }, 200); 
-                        targetFOV = DEFAULT_FOV; 
-                    }
+                    isZooming = false; 
+                    targetFOV = DEFAULT_FOV; 
                 }
             });
         }
@@ -586,7 +578,7 @@
 
             document.addEventListener('touchmove', (e) => {
                 if (!isIntroFinished) return;
-                if (isZooming || isZoomCooldown) return; 
+                if (isZooming) return; 
 
                 let touch = null;
                 for(let i=0; i<e.changedTouches.length; i++) { if(e.changedTouches[i].identifier === lookTouchId) { touch = e.changedTouches[i]; break; } }
@@ -632,7 +624,6 @@
                 if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
                 
                 if (!isZooming && (joystickVector.x !== 0 || joystickVector.y !== 0)) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
-                
                 if (controls.isLocked) { 
                     controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); 
                     targetRotationY = camera.rotation.y;
