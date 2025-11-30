@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>White Void Gallery</title>
     
-    <link rel="preconnect" href="https://esm.sh">
-    <link rel="preconnect" href="https://www.gstatic.com">
+    <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://firebasestorage.googleapis.com">
 
     <style>
@@ -62,9 +61,9 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://esm.sh/three@0.160.0",
-                "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
-                "gsap": "https://esm.sh/gsap@3.12.5"
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
             }
         }
     </script>
@@ -148,6 +147,7 @@
             keyLight.shadow.mapSize.set(2048, 2048); 
             keyLight.shadow.bias = -0.0001; 
             keyLight.shadow.radius = 60; 
+            
             const d = 15; keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d; keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d; 
             scene.add(keyLight);
             
@@ -207,7 +207,8 @@
         function loadModelFromUrl(url, name) {
             const loader = new GLTFLoader();
             const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+            // 使用 unpkg，提升国内访问速度
+            dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
             loader.setDRACOLoader(dracoLoader);
             loader.load(url, (gltf) => {
                 processAndPlaceModel(gltf.scene, name);
@@ -224,7 +225,6 @@
             revealScene();
         }
 
-        // === 修改点：纯随机命名生成 ===
         function generateSystematicName(seed) {
             let hash = 0;
             if (!seed || seed.length === 0) return "NULL · 000 · Ø";
@@ -353,6 +353,12 @@
             isModelLoaded = true;
         }
 
+        function resetMovementState() {
+            moveForward = false; moveBackward = false; moveLeft = false; moveRight = false;
+            joystickVector = { x: 0, y: 0 };
+            velocity.set(0, 0, 0);
+        }
+
         function revealScene() {
             setTimeout(() => {
                 gsap.to(introOverlayDiv, { opacity: 0, duration: 2.0, ease: "power2.inOut", 
@@ -360,6 +366,8 @@
                         introOverlayDiv.style.display = 'none'; 
                         clickCaptureDiv.style.display = 'block'; 
                         instructionText.style.opacity = '1';
+                        // === 修复 2: 强制重置所有运动状态，防止漂移 ===
+                        resetMovementState();
                         isIntroFinished = true; 
                     }
                 });
@@ -375,7 +383,10 @@
                      targetRotationY = camera.rotation.y;
                      targetRotationX = camera.rotation.x;
                  },
-                 onComplete: () => { isResetting = false; }
+                 onComplete: () => { 
+                     isResetting = false; 
+                     resetMovementState(); // 复位完成后也清理一次速度
+                 }
              });
              tl.to(camera.position, { x: destPos.x, y: destPos.y, z: destPos.z, duration: duration, ease: ease }, 0);
              const tempCam = camera.clone();
@@ -486,9 +497,20 @@
         function animate() { 
             requestAnimationFrame(animate); 
             const time = performance.now(); 
-            const delta = (time - prevTime) / 1000;
-            velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; 
-            direction.z = Number(moveForward) - Number(moveBackward); direction.x = Number(moveRight) - Number(moveLeft); direction.normalize(); 
+            // === 修复 2: 限制 delta 最大值，防止卡顿后飞出 ===
+            let delta = (time - prevTime) / 1000;
+            if (delta > 0.05) delta = 0.05; // 限制为最大 20fps 的间隔，防止瞬移
+
+            velocity.x -= velocity.x * 10.0 * delta; 
+            velocity.z -= velocity.z * 10.0 * delta; 
+            
+            // 安全兜底：如果速度极小，直接归零，防止微小漂移
+            if(Math.abs(velocity.x) < 0.001) velocity.x = 0;
+            if(Math.abs(velocity.z) < 0.001) velocity.z = 0;
+
+            direction.z = Number(moveForward) - Number(moveBackward); 
+            direction.x = Number(moveRight) - Number(moveLeft); 
+            direction.normalize(); 
             
             if (isIntroFinished) { 
                 if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
