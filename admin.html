@@ -7,6 +7,18 @@
         :root { --bg: #f2f2f2; --surface: #ffffff; --line: #e0e0e0; --text-main: #111; --text-dim: #888; --accent: #000; --daily: #2980b9; --alert: #ff3b30; }
         * { box-sizing: border-box; }
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text-main); margin: 0; padding: 0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* 门禁 */
+        #security-gate { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .gate-box { text-align: center; width: 300px; }
+        .gate-title { font-weight: 700; letter-spacing: 2px; margin-bottom: 20px; font-size: 12px; color: #666; }
+        .gate-input { width: 100%; padding: 15px; border: 2px solid #eee; border-radius: 8px; font-size: 16px; text-align: center; outline: none; transition: all 0.2s; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 500; color: #333; }
+        .gate-input:focus { border-color: #000; }
+        .gate-input.error { border-color: var(--alert); color: var(--alert); animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+        .gate-btn { margin-top: 15px; width: 100%; padding: 12px; background: #000; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
+        .gate-btn:hover { opacity: 0.8; }
+
         header { background: var(--surface); border-bottom: 1px solid var(--line); padding: 0 30px; height: 70px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
         .brand { font-weight: 700; letter-spacing: -0.5px; font-size: 18px; }
         .metrics { display: flex; gap: 40px; height: 100%; align-items: center; }
@@ -60,15 +72,6 @@
         .btn-download:hover { background: #f0f0f0; }
         .btn-delete { background: #fff0f0; border: 1px solid #ffcccc; color: var(--alert); }
         .btn-delete:hover { background: var(--alert); color: white; border-color: var(--alert); }
-        #security-gate { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .gate-box { text-align: center; width: 300px; }
-        .gate-title { font-weight: 700; letter-spacing: 2px; margin-bottom: 20px; font-size: 12px; color: #666; }
-        .gate-input { width: 100%; padding: 15px; border: 2px solid #eee; border-radius: 8px; font-size: 16px; text-align: center; outline: none; transition: all 0.2s; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 500; color: #333; }
-        .gate-input:focus { border-color: #000; }
-        .gate-input.error { border-color: var(--alert); color: var(--alert); animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
-        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
-        .gate-btn { margin-top: 15px; width: 100%; padding: 12px; background: #000; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
-        .gate-btn:hover { opacity: 0.8; }
         #preview-canvas-container { display: none; }
         #upload-progress-overlay { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #000; color: white; padding: 10px 20px; border-radius: 30px; font-size: 12px; display: none; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 100; }
     </style>
@@ -82,6 +85,7 @@
             <button id="gate-submit" class="gate-btn">ACCESS</button>
         </div>
     </div>
+
     <header>
         <div class="brand">MONOLOGUE / 24 <span style="font-weight:400; color:#888;">// CONSOLE</span></div>
         <div class="metrics">
@@ -115,18 +119,47 @@
         const passInput = document.getElementById('gate-password');
         const submitBtn = document.getElementById('gate-submit');
         const CORRECT_CODE = "art2024"; 
+
+        // === 修改 1: 恢复 Session 检查 ===
+        // 只要浏览器没关，刷新页面直接进入
+        if (sessionStorage.getItem('admin_auth') === 'true') {
+            gate.style.display = 'none';
+            // 延时一点点，避免 DOM 竞争
+            setTimeout(() => initApp(), 50); 
+        }
+
         submitBtn.addEventListener('click', checkPassword);
         passInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') checkPassword(); });
+
         function checkPassword() {
-            if (passInput.value === CORRECT_CODE) { sessionStorage.setItem('admin_auth', 'true'); gate.style.display = 'none'; initApp(); } 
-            else { passInput.classList.add('error'); passInput.value = ''; setTimeout(() => { passInput.classList.remove('error'); }, 400); }
+            if (passInput.value === CORRECT_CODE) { 
+                sessionStorage.setItem('admin_auth', 'true'); // 写入 Session
+                gate.style.display = 'none'; 
+                initApp(); 
+            } else { 
+                passInput.classList.add('error'); 
+                passInput.value = ''; 
+                setTimeout(() => { passInput.classList.remove('error'); }, 400); 
+            }
         }
-        // 移除自动登录，强制每次输入
-        // if (sessionStorage.getItem('admin_auth') === 'true') { ... }
 
-        function initApp() { if (window.appInitialized) return; window.appInitialized = true; initThreeJS(); initDataListener(); }
+        function initApp() { 
+            if (window.appInitialized) return; 
+            window.appInitialized = true; 
+            initThreeJS(); 
+            initDataListener(); 
+        }
 
-        const firebaseConfig = { apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc", authDomain: "online-white-box.firebaseapp.com", projectId: "online-white-box", storageBucket: "online-white-box.firebasestorage.app", messagingSenderId: "227799896378", appId: "1:227799896378:web:94e416ee99d0e720e18003", measurementId: "G-G2ZWQZ8W8F" };
+        const firebaseConfig = {
+            apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
+            authDomain: "online-white-box.firebaseapp.com",
+            projectId: "online-white-box",
+            storageBucket: "online-white-box.firebasestorage.app",
+            messagingSenderId: "227799896378",
+            appId: "1:227799896378:web:94e416ee99d0e720e18003",
+            measurementId: "G-G2ZWQZ8W8F"
+        };
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const storage = getStorage(app);
@@ -151,7 +184,16 @@
             dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
             loader.setDRACOLoader(dracoLoader);
         }
-        function mulberry32(a) { return function() { var t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; } }
+
+        function mulberry32(a) {
+            return function() {
+                var t = a += 0x6D2B79F5;
+                t = Math.imul(t ^ t >>> 15, t | 1);
+                t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+
         function getDailyModelID(models) {
             if (!models || models.length === 0) return null;
             const sortedModels = [...models].sort((a, b) => {
@@ -171,6 +213,7 @@
             const dailyIndex = daysSinceEpoch % sortedModels.length;
             return shuffled[dailyIndex].id;
         }
+
         function initDataListener() {
             const q = query(collection(db, "model_library"), orderBy("uploadDate", "desc"));
             onSnapshot(q, (snapshot) => {
@@ -209,22 +252,37 @@
                 }
             });
         }
+
+        // === 修改 2: 同步 getArtData 与前台完全一致 ===
         function getArtData(seed) {
             let hash = 0; if (!seed || seed.length === 0) return { title: "NULL · 000 · Ø", year: 2024, material: "Unknown" };
             for (let i = 0; i < seed.length; i++) { hash = ((hash << 5) - hash) + seed.charCodeAt(i); hash |= 0; }
             hash = Math.abs(hash); const rng = mulberry32(hash); const rand = rng();
+            
+            // Title Logic (Same as Frontend)
             let prefix = ""; const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"; for (let i = 0; i < 4; i++) { prefix += letters.charAt(Math.floor(rng() * letters.length)); }
             const num = Math.floor(rng() * 1000).toString().padStart(3, '0'); 
             const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
-            const title = `${prefix} · ${num} · ${symbols[Math.floor(rng() * symbols.length)]}`;
+            const sIndex = Math.floor(rng() * symbols.length);
+            const title = `${prefix} · ${num} · ${symbols[sIndex]}`;
+
+            // Year Logic
             const year = Math.floor(rng() * (2025 - 1980 + 1)) + 1980;
+
+            // Material Logic (Complex/Wild)
             const rawMats = ["Bronze", "Marble", "Steel", "Resin", "Concrete", "Glass", "Silicon", "Carbon Fiber", "Gold Leaf"];
             const wildMats = ["Liquid Light", "Solidified Smoke", "Aerogel", "Metallic Hydrogen", "Quantum Foam", "Corrupted Data", "Lunar Dust", "Haptic Feedback", "Neural Network Weights"];
             const concepts = ["Time", "Silence", "Gravity", "Memory", "Void", "Echoes", "Entropy"];
             let material = ""; const matType = rng();
-            if (matType < 0.3) { material = wildMats[Math.floor(rng() * wildMats.length)]; } else if (matType < 0.6) { material = `${rawMats[Math.floor(rng() * rawMats.length)]} & ${wildMats[Math.floor(rng() * wildMats.length)]}`; } else if (matType < 0.8) { material = `Compressed ${concepts[Math.floor(rng() * concepts.length)]}`; } else { material = `Polished ${rawMats[Math.floor(rng() * rawMats.length)]} encased in Vacuum`; }
+            
+            if (matType < 0.3) { material = wildMats[Math.floor(rng() * wildMats.length)]; } 
+            else if (matType < 0.6) { material = `${rawMats[Math.floor(rng() * rawMats.length)]} & ${wildMats[Math.floor(rng() * wildMats.length)]}`; } 
+            else if (matType < 0.8) { material = `Compressed ${concepts[Math.floor(rng() * concepts.length)]}`; } 
+            else { material = `Polished ${rawMats[Math.floor(rng() * rawMats.length)]} encased in Vacuum`; }
+
             return { title, year, material };
         }
+
         function updateDashboard(count, bytes) { document.getElementById('stat-count').innerText = count; const mb = (bytes / (1024 * 1024)).toFixed(2); document.getElementById('stat-size-text').innerText = `${mb} MB`; const percent = Math.min((mb / 5120) * 100, 100); const bar = document.getElementById('stat-storage-bar'); bar.style.width = `${percent}%`; if(percent > 80) bar.className = 'progress-fill warning'; if(percent > 95) bar.className = 'progress-fill danger'; }
         function selectModel(id) { selectedModelId = id; document.querySelectorAll('.grid-item').forEach(el => el.classList.remove('selected')); const model = currentModels.find(m => m.id === id); if (model) renderInspector(model); }
         function renderInspector(data) { const panel = document.getElementById('inspector'); const artInfo = getArtData(data.name); const dateStr = data.uploadDate ? new Date(data.uploadDate.seconds * 1000).toLocaleDateString() : 'Unknown'; const sizeStr = data.size ? (data.size / 1024 / 1024).toFixed(2) + ' MB' : 'Legacy (N/A)'; const thumb = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div style="color:#ccc;">No Preview</div>`; const pinnedLabel = data.pinned ? "UNDO PIN" : "PIN TO DISPLAY"; const pinnedClass = data.pinned ? "is-pinned" : ""; const encodedPath = encodeURIComponent(data.storagePath); const consoleUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/storage/${firebaseConfig.storageBucket}/files/~2F${encodedPath}`; panel.innerHTML = `<div class="preview-large">${thumb}</div><div class="meta-group"><div class="meta-label">Systematic ID</div><div class="art-title">${artInfo.title}</div></div><div class="label-preview"><div class="meta-label">Label Preview</div><div class="lp-year">${artInfo.year}</div><div class="lp-mat" style="font-weight:600; color:#333;">${artInfo.material}</div><div class="lp-mat">Variable Dimensions</div></div><div class="meta-group"><div class="meta-label">Original Filename</div><div class="meta-value mono">${data.name}</div></div><div class="meta-group" style="display:flex; gap:20px;"><div><div class="meta-label">File Size</div><div class="meta-value mono">${sizeStr}</div></div><div><div class="meta-label">Date Added</div><div class="meta-value mono">${dateStr}</div></div></div><div class="meta-group"><div class="meta-label">Storage Path (Click to Open)</div><a href="${consoleUrl}" target="_blank" class="meta-value mono storage-link">${data.storagePath}</a></div><div class="action-group"><button class="btn-action btn-pin ${pinnedClass}" onclick="togglePin('${data.id}', ${data.pinned})">${pinnedLabel}</button><button class="btn-action btn-download" onclick="window.open('${data.url}')">DOWNLOAD</button><button class="btn-action btn-delete" onclick="deleteModel('${data.id}', '${data.storagePath}', '${data.thumbPath}')">DELETE</button></div>`; }
