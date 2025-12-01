@@ -10,19 +10,7 @@
     <link rel="preconnect" href="https://firebasestorage.googleapis.com">
 
     <style>
-        /* 基础样式，添加过渡效果使得黑白切换丝滑 */
-        body { 
-            margin: 0; overflow: hidden; background-color: #ffffff; 
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; 
-            touch-action: none; -webkit-user-select: none; user-select: none; 
-            transition: background-color 1.5s ease, filter 1.5s ease; /* 丝滑过渡 */
-        }
-        
-        /* === 反色模式类 === */
-        body.invert-mode {
-            filter: invert(1) hue-rotate(180deg); 
-            background-color: #000000; 
-        }
+        body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
         
         #intro-overlay { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
@@ -142,7 +130,7 @@
         };
 
         let app, db;
-        try { app = initializeApp(firebaseConfig); db = getFirestore(app); } catch(e) { console.warn("Firebase init failed", e); }
+        try { app = initializeApp(firebaseConfig); db = getFirestore(app); } catch(e) { console.warn("Firebase init failed (Offline mode?)", e); }
 
         let camera, scene, renderer, controls;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -160,6 +148,7 @@
         let isModelLoaded = false;
         let isIntroFinished = false; 
         let isResetting = false; 
+        let isForce404 = false; // 记录当前是否强制404
         
         const clickCaptureDiv = document.getElementById('click-capture');
         const introOverlayDiv = document.getElementById('intro-overlay');
@@ -188,7 +177,7 @@
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xffffff); // 默认白
+            scene.background = new THREE.Color(0xffffff);
             camera = new THREE.PerspectiveCamera(DEFAULT_FOV, window.innerWidth / window.innerHeight, 0.1, 100);
             
             if (window.innerWidth < window.innerHeight) { camera.position.copy(MOBILE_CAM_POS); } 
@@ -238,17 +227,19 @@
             
             window.addEventListener('resize', onWindowResize);
 
+            // === 1. 超时保险：15秒强制黑碑 ===
             setTimeout(() => {
                 if (!isModelLoaded) {
-                    console.warn("Connection timeout. Deploying The Monolith.");
+                    console.warn("Connection timeout (15s). Deploying The Monolith.");
                     loadTheMonolith(); 
                 }
             }, 15000);
 
             if(db) {
-                // === 修改：添加实时监听 ===
+                // === 2. 启动实时监听 ===
                 initRealtimeListener();
             } else {
+                // 无数据库连接，直接黑碑
                 loadTheMonolith(); 
             }
         }
@@ -266,6 +257,29 @@
             }
             update();
             setInterval(update, 1000);
+        }
+
+        // === 实时监听系统 ===
+        function initRealtimeListener() {
+            // 监听全局配置开关
+            onSnapshot(doc(db, "settings", "config"), (docSnap) => {
+                if (docSnap.exists() && docSnap.data().forceMonolith) {
+                    console.log("FORCE 404: ON");
+                    isForce404 = true;
+                    loadTheMonolith();
+                } else {
+                    console.log("FORCE 404: OFF");
+                    // 如果之前是开启状态，现在关闭了，需要重新加载正常模型
+                    if (isForce404) {
+                        isForce404 = false;
+                        isModelLoaded = false; // 强制重载标记
+                        checkPinAndLoad();
+                    }
+                }
+            });
+
+            // 首次运行检查
+            if (!isForce404) checkPinAndLoad();
         }
 
         function mulberry32(a) {
@@ -297,30 +311,8 @@
             return shuffled[dailyIndex].id;
         }
 
-        // === 新增：实时监听逻辑，替代 checkPinAndLoad ===
-        function initRealtimeListener() {
-            // 1. 监听全局配置
-            onSnapshot(doc(db, "settings", "config"), (docSnap) => {
-                if (docSnap.exists() && docSnap.data().forceMonolith) {
-                    console.log("FORCE 404: ON");
-                    loadTheMonolith();
-                } else {
-                    console.log("FORCE 404: OFF");
-                    // 重新触发加载逻辑（防止此时正好显示黑碑）
-                    // 我们不重新加载模型如果它已经是正确的模型，但这里简化逻辑，直接调一次加载流程
-                    checkPinAndLoad();
-                }
-            });
-        }
-
         async function checkPinAndLoad() {
-            // 再次检查配置，防止竞态条件
-            const configRef = doc(db, "settings", "config");
-            const configSnap = await getDoc(configRef);
-            if (configSnap.exists() && configSnap.data().forceMonolith) {
-                loadTheMonolith();
-                return;
-            }
+            if (isForce404) return; // 如果开关开着，阻止加载
 
             try {
                 const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
@@ -353,6 +345,8 @@
             dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
             loader.setDRACOLoader(dracoLoader);
             loader.load(url, (gltf) => {
+                // 再次检查，防止加载过程中开关被打开
+                if (isForce404) return; 
                 processAndPlaceModel(gltf.scene, name);
                 revealScene();
             }, undefined, (err) => { 
@@ -394,7 +388,7 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 展签参数锁定 ===
+            // === 严格保持参数 ===
             ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText("EXHIBITION OF THE DAY", 100, 140);
@@ -426,15 +420,11 @@
             return mesh;
         }
 
-        // === 黑碑模式 (反相 + 黑底) ===
+        // === 修复：Monolith 不使用反色，直接绘制黑底 ===
         function loadTheMonolith() {
-            // 即使已经有模型，如果是切换到 Monolith，也要强制覆盖
-            // 但如果是初始化，避免重复
+            // 1. 确保背景是白色 (白房间里的黑碑)
+            scene.background = new THREE.Color(0xffffff);
             
-            // 1. 核心：开启反相模式
-            document.body.classList.add('invert-mode');
-            scene.background = new THREE.Color(0x000000); // 物理背景黑
-
             if (sculptureWrapper) scene.remove(sculptureWrapper);
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; } 
 
@@ -442,8 +432,13 @@
             cvs.width = 1024; cvs.height = 2048;
             const ctx = cvs.getContext('2d');
             
-            ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, 1024, 2048);
-            ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 3;
+            // 2. 黑底
+            ctx.fillStyle = '#0a0a0a'; 
+            ctx.fillRect(0, 0, 1024, 2048);
+            
+            // 3. 灰纹路
+            ctx.strokeStyle = '#1a1a1a'; 
+            ctx.lineWidth = 3;
             for(let i=0; i<40; i++) {
                 ctx.beginPath();
                 ctx.moveTo(Math.random()*1024, Math.random()*2048);
@@ -451,9 +446,10 @@
                 ctx.stroke();
             }
 
+            // 4. 灰字 (低对比度)
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.font = 'bold 80px "Songti TC", "SimSun", serif'; 
-            ctx.fillStyle = '#222222'; 
+            ctx.fillStyle = '#333333'; 
             
             ctx.fillText("你", 512, 800);
             ctx.fillText("被", 512, 900);
@@ -465,7 +461,14 @@
 
             const texture = new THREE.CanvasTexture(cvs);
             const geometry = new THREE.BoxGeometry(2.0, 5.0, 0.5); 
-            const material = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.2, metalness: 0.7, envMapIntensity: 1.0 });
+            // 黑色大理石质感
+            const material = new THREE.MeshStandardMaterial({ 
+                map: texture, 
+                color: 0xffffff, 
+                roughness: 0.1, 
+                metalness: 0.6, 
+                envMapIntensity: 1.0 
+            });
             const monolith = new THREE.Mesh(geometry, material);
             monolith.castShadow = true; monolith.receiveShadow = true;
 
@@ -474,7 +477,9 @@
             sculptureWrapper.add(monolith);
             sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = 0;
 
-            colliderRadius = 2.0; isModelLoaded = true;
+            colliderRadius = 2.0; 
+            isModelLoaded = true;
+            
             revealScene();
         }
 
@@ -502,12 +507,7 @@
             return solidH;
         }
 
-        // === 核心修改：恢复环境 ===
         function processAndPlaceModel(rawModel, rawName) {
-            // 1. 移除反相模式，恢复白背景
-            document.body.classList.remove('invert-mode');
-            scene.background = new THREE.Color(0xffffff);
-
             if (sculptureWrapper) scene.remove(sculptureWrapper);
             if (labelMesh) scene.remove(labelMesh);
             rawModel.traverse((child) => {
@@ -721,7 +721,7 @@
                 if (!touch) return;
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
-                const sensitivity = 0.004; 
+                const sensitivity = 0.01; 
                 targetRotationY -= deltaX * sensitivity;
                 targetRotationX -= deltaY * sensitivity;
                 targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
