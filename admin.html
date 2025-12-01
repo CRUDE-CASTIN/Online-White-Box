@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>VOID ARCHIVE // MANAGER</title>
+    <title>MONOLOGUE / 24 // CONSOLE</title>
     <style>
         :root { 
             --bg: #f2f2f2; 
@@ -11,8 +11,8 @@
             --text-main: #111; 
             --text-dim: #888;
             --accent: #000;
-            --daily: #2980b9; /* 蓝色用于表示今日自动 */
             --alert: #ff3b30;
+            --daily: #2980b9;
         }
         
         * { box-sizing: border-box; }
@@ -31,7 +31,9 @@
             background: var(--surface); border-bottom: 1px solid var(--line);
             padding: 0 30px; height: 70px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
         }
+        /* === 修改：Logo 更新 === */
         .brand { font-weight: 700; letter-spacing: -0.5px; font-size: 18px; }
+        
         .metrics { display: flex; gap: 40px; height: 100%; align-items: center; }
         .metric-item { display: flex; flex-direction: column; justify-content: center; min-width: 120px; }
         .metric-label { font-size: 10px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 4px; }
@@ -54,17 +56,12 @@
         .btn-upload:disabled { background: #ccc; cursor: not-allowed; }
 
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; }
-        
         .grid-item {
             background: var(--surface); border: 2px solid transparent; aspect-ratio: 1; border-radius: 4px; overflow: hidden;
             cursor: pointer; position: relative; transition: all 0.2s;
         }
         .grid-item:hover { border-color: #999; }
         .grid-item.selected { box-shadow: 0 0 0 3px rgba(0,0,0,0.1); transform: scale(0.98); }
-
-        /* === 状态样式 === */
-        
-        /* 1. 人工置顶 (黑色) */
         .grid-item.pinned { border-color: var(--accent); border-width: 4px; }
         .badge-pinned {
             position: absolute; top: 0; left: 0; background: var(--accent); color: white;
@@ -72,8 +69,6 @@
             display: none; z-index: 2;
         }
         .grid-item.pinned .badge-pinned { display: block; }
-
-        /* 2. 今日自动展出 (蓝色) */
         .grid-item.daily { border-color: var(--daily); border-width: 4px; }
         .badge-daily {
             position: absolute; top: 0; right: 0; background: var(--daily); color: white;
@@ -81,8 +76,6 @@
             display: none; z-index: 2;
         }
         .grid-item.daily .badge-daily { display: block; }
-        
-        /* 3. 如果既是置顶又是今日 (双重边框效果不容易做，优先显示置顶黑框，但两个标都显示) */
         .grid-item.pinned.daily { border-color: var(--accent); } 
 
         .grid-item img { width: 100%; height: 100%; object-fit: cover; }
@@ -134,7 +127,7 @@
 <body>
 
     <header>
-        <div class="brand">VOID ARCHIVE <span style="font-weight:400; color:#888;">// MANAGER</span></div>
+        <div class="brand">MONOLOGUE / 24 <span style="font-weight:400; color:#888;">// CONSOLE</span></div>
         <div class="metrics">
             <div class="metric-item"><div class="metric-label">Total Assets</div><div class="metric-value" id="stat-count">0</div></div>
             <div class="metric-item" style="width: 150px;"><div class="metric-label">Storage Used (<span id="stat-size-text">0 MB</span> / 5 GB)</div><div class="progress-track"><div class="progress-fill" id="stat-storage-bar"></div></div></div>
@@ -204,7 +197,6 @@
             loader.setDRACOLoader(dracoLoader);
         }
 
-        // === 伪随机数算法 (Seeded RNG) ===
         function mulberry32(a) {
             return function() {
                 var t = a += 0x6D2B79F5;
@@ -214,31 +206,18 @@
             }
         }
 
-        // === 核心：计算今日自动展示的模型 ===
         function getDailyModelID(models) {
             if (!models || models.length === 0) return null;
-            
-            // 1. 确保排序一致 (按上传时间)
             const sortedModels = [...models].sort((a, b) => a.uploadDate.seconds - b.uploadDate.seconds);
-            
-            // 2. 计算今天是第几天 (UTC)
             const now = new Date();
             const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
-            
-            // 3. 计算周期 (Cycle)
-            // 每一轮周期 = 模型总数天
             const cycle = Math.floor(daysSinceEpoch / sortedModels.length);
-            
-            // 4. 确定性洗牌 (Fisher-Yates with Seed)
-            // 使用 Cycle 作为随机种子，保证这一轮周期内的顺序是固定的且不重复
             const rng = mulberry32(cycle);
             const shuffled = [...sortedModels];
             for (let i = shuffled.length - 1; i > 0; i--) {
                 const j = Math.floor(rng() * (i + 1));
                 [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
             }
-            
-            // 5. 取当天的模型
             const dailyIndex = daysSinceEpoch % sortedModels.length;
             return shuffled[dailyIndex].id;
         }
@@ -258,32 +237,22 @@
                     if(data.size) totalBytes += data.size;
                 });
                 
-                // 计算今日模型 ID
                 const dailyId = getDailyModelID(currentModels.filter(m => m.active));
 
                 currentModels.forEach(data => {
                     const el = document.createElement('div');
-                    
-                    // 判断状态
                     const isPinned = data.pinned;
                     const isDaily = (data.id === dailyId);
-                    
-                    // 设置 Class
                     let classList = 'grid-item';
                     if (isPinned) classList += ' pinned';
                     if (isDaily) classList += ' daily';
                     if (data.id === selectedModelId) classList += ' selected';
                     el.className = classList;
-                    
                     el.onclick = () => selectModel(data.id);
-                    
                     const thumb = data.thumbnailUrl ? `<img src="${data.thumbnailUrl}">` : `<div class="no-thumb">#</div>`;
-                    
-                    // 徽章
                     let badges = '';
                     if (isPinned) badges += `<div class="badge-pinned">PINNED</div>`;
-                    if (isDaily) badges += `<div class="badge-daily">LIVE</div>`; // 今日自动
-                    
+                    if (isDaily) badges += `<div class="badge-daily">LIVE</div>`; 
                     el.innerHTML = `${badges}${thumb}`;
                     grid.appendChild(el);
                 });
@@ -292,7 +261,10 @@
                 if (selectedModelId) {
                     const updatedModel = currentModels.find(m => m.id === selectedModelId);
                     if (updatedModel) renderInspector(updatedModel);
-                    else selectedModelId = null;
+                    else {
+                        document.getElementById('inspector').innerHTML = '<div class="inspector-empty">Asset deleted</div>';
+                        selectedModelId = null;
+                    }
                 }
             });
         }
@@ -303,7 +275,6 @@
             for (let i = 0; i < seed.length; i++) { hash = ((hash << 5) - hash) + seed.charCodeAt(i); hash |= 0; }
             hash = Math.abs(hash);
             const rng = mulberry32(hash);
-            
             const rand = rng();
             let prefix = "";
             const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
