@@ -7,6 +7,7 @@
     
     <link rel="preconnect" href="https://esm.sh">
     <link rel="preconnect" href="https://cdn.jsdelivr.net"> 
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com">
 
     <style>
         body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
@@ -88,9 +89,7 @@
             "imports": {
                 "three": "https://esm.sh/three@0.160.0",
                 "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
-                "gsap": "https://esm.sh/gsap@3.12.5",
-                "firebase/app": "https://esm.sh/firebase@10.7.1/app",
-                "firebase/firestore": "https://esm.sh/firebase@10.7.1/firestore"
+                "gsap": "https://esm.sh/gsap@3.12.5"
             }
         }
     </script>
@@ -115,10 +114,8 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
         import gsap from 'gsap';
-        
-        // 修改：从 esm.sh 导入 Firebase，国内加载几率更高
-        import { initializeApp } from "firebase/app";
-        import { getFirestore, collection, getDocs, query, where } from "firebase/firestore";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
@@ -131,8 +128,7 @@
         };
 
         let app, db;
-        // 尝试初始化 Firebase，如果失败（网络问题）则忽略，依靠 timeout 兜底
-        try { app = initializeApp(firebaseConfig); db = getFirestore(app); } catch(e) { console.warn("Firebase init failed (Offline mode?)", e); }
+        try { app = initializeApp(firebaseConfig); db = getFirestore(app); } catch(e) { console.error(e); }
 
         let camera, scene, renderer, controls;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -228,17 +224,16 @@
             
             window.addEventListener('resize', onWindowResize);
 
-            // === 修改：缩短超时时间至 3秒 ===
-            // 如果3秒内没连上数据库，直接加载默认模型，保证中国大陆用户能打开
+            // === 修改 1: 超时延长至 15 秒，触发黑碑彩蛋 ===
             setTimeout(() => {
                 if (!isModelLoaded) {
-                    console.warn("Connection timeout (GFW?). Forcing default model.");
-                    loadDefaultSculpture();
+                    console.warn("Connection timeout. Deploying The Monolith.");
+                    loadTheMonolith(); // 调用彩蛋函数
                 }
-            }, 3000);
+            }, 15000); // 15秒
 
             if(db) checkPinAndLoad(); 
-            else loadDefaultSculpture();
+            else loadTheMonolith(); // 无数据库也直接黑碑
         }
 
         function startClock() {
@@ -254,6 +249,87 @@
             }
             update();
             setInterval(update, 1000);
+        }
+
+        // === 2. 2001太空漫游石碑生成器 ===
+        function loadTheMonolith() {
+            if (isModelLoaded) return;
+
+            // 移除已有
+            if (sculptureWrapper) scene.remove(sculptureWrapper);
+            if (labelMesh) { scene.remove(labelMesh); labelMesh = null; } // === 修改 3: 移除展签 ===
+
+            // 创建纹理
+            const cvs = document.createElement('canvas');
+            cvs.width = 1024; cvs.height = 2048;
+            const ctx = cvs.getContext('2d');
+            
+            // 深色石材背景
+            ctx.fillStyle = '#0a0a0a'; 
+            ctx.fillRect(0, 0, 1024, 2048);
+            
+            // 随机大理石纹路 (低对比度)
+            ctx.strokeStyle = '#1a1a1a'; 
+            ctx.lineWidth = 3;
+            for(let i=0; i<40; i++) {
+                ctx.beginPath();
+                ctx.moveTo(Math.random()*1024, Math.random()*2048);
+                ctx.bezierCurveTo(
+                    Math.random()*1024, Math.random()*2048,
+                    Math.random()*1024, Math.random()*2048,
+                    Math.random()*1024, Math.random()*2048
+                );
+                ctx.stroke();
+            }
+
+            // 刻字 (低对比度)
+            ctx.textAlign = 'center'; 
+            ctx.textBaseline = 'middle';
+            
+            ctx.font = 'bold 80px "Songti TC", "SimSun", serif'; // 衬线体更有碑文感
+            ctx.fillStyle = '#222222'; 
+            
+            // 竖排文字模拟
+            ctx.fillText("你", 512, 800);
+            ctx.fillText("被", 512, 900);
+            ctx.fillText("牆", 512, 1000);
+            ctx.fillText("了", 512, 1100);
+
+            ctx.font = '40px Helvetica, Arial';
+            ctx.fillText("ERROR 404: VPN NOT FOUND", 512, 1300);
+
+            const texture = new THREE.CanvasTexture(cvs);
+            
+            // 经典比例 1:4:9
+            // 宽 1.5m, 厚 0.375m, 高 6m (为了视觉震撼，稍微调整比例)
+            const geometry = new THREE.BoxGeometry(2.0, 5.0, 0.5); 
+            const material = new THREE.MeshStandardMaterial({ 
+                map: texture,
+                color: 0xffffff,
+                roughness: 0.2, // 光滑
+                metalness: 0.7, // 半金属质感
+                envMapIntensity: 1.0
+            });
+            
+            const monolith = new THREE.Mesh(geometry, material);
+            monolith.castShadow = true; 
+            monolith.receiveShadow = true;
+
+            sculptureWrapper = new THREE.Group();
+            scene.add(sculptureWrapper);
+            
+            // 落地
+            monolith.position.y = 2.5; // 高度的一半
+            sculptureWrapper.add(monolith);
+            
+            sculptureWrapper.position.copy(targetPosition);
+            sculptureWrapper.rotation.y = 0;
+
+            // 碰撞体积
+            colliderRadius = 2.0; 
+            isModelLoaded = true;
+            
+            revealScene();
         }
 
         function mulberry32(a) {
@@ -298,41 +374,32 @@
                 const querySnapshot = await getDocs(q);
                 let models = [];
                 querySnapshot.forEach((doc) => { models.push({ id: doc.id, ...doc.data() }); });
-                if (models.length === 0) { loadDefaultSculpture(); return; }
+                if (models.length === 0) { loadTheMonolith(); return; }
                 const dailyId = getDailyModelID(models);
                 const selected = models.find(m => m.id === dailyId) || models[0];
                 loadModelFromUrl(selected.url, selected.name);
             } catch (error) { 
                 console.error("Firebase error", error); 
-                // 出错立即加载默认，不要干等
-                loadDefaultSculpture(); 
+                // 失败直接黑碑
+                loadTheMonolith(); 
             }
         }
 
         function loadModelFromUrl(url, name) {
             const loader = new GLTFLoader();
             const dracoLoader = new DRACOLoader();
-            // === 修改：使用 jsdelivr 加载 Draco，绕过 gstatic ===
             dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
             loader.setDRACOLoader(dracoLoader);
             loader.load(url, (gltf) => {
                 processAndPlaceModel(gltf.scene, name);
                 revealScene();
             }, undefined, (err) => { 
-                console.error("Load error, fallback", err);
-                loadDefaultSculpture(); 
+                console.error("Load error", err);
+                loadTheMonolith(); 
             });
         }
 
-        function loadDefaultSculpture() {
-            if (isModelLoaded) return; 
-            const group = new THREE.Group();
-            const material = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2, metalness: 0.8 });
-            const geo = new THREE.TorusKnotGeometry(0.8, 0.25, 128, 64);
-            const mesh = new THREE.Mesh(geo, material); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
-            processAndPlaceModel(group, "Default Sculpture");
-            revealScene();
-        }
+        // ... (Museum Label related functions removed or not used when Monolith is active) ...
 
         function generateSystematicName(seed) {
             let hash = 0;
@@ -346,13 +413,9 @@
                 return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
             }
             const rand = rng(hash);
-            let prefix = "";
-            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            for (let i = 0; i < 4; i++) {
-                const charIndex = Math.floor(rng(hash + i) * letters.length);
-                prefix += letters.charAt(charIndex);
-            }
-            const num = Math.floor(rng(hash + 99) * 1000).toString().padStart(3, '0'); 
+            let prefix = ""; const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            for (let i = 0; i < 4; i++) { prefix += letters.charAt(Math.floor(rng() * letters.length)); }
+            const num = Math.floor(rng() * 1000).toString().padStart(3, '0'); 
             const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
             const sIndex = Math.floor(rng(hash + 77) * symbols.length);
             return `${prefix} · ${num} · ${symbols[sIndex]}`;
@@ -640,7 +703,7 @@
                 if (!touch) return;
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
-                const sensitivity = 0.01; 
+                const sensitivity = 0.004; 
                 targetRotationY -= deltaX * sensitivity;
                 targetRotationX -= deltaY * sensitivity;
                 targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
