@@ -89,7 +89,9 @@
             "imports": {
                 "three": "https://esm.sh/three@0.160.0",
                 "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
-                "gsap": "https://esm.sh/gsap@3.12.5"
+                "gsap": "https://esm.sh/gsap@3.12.5",
+                "firebase/app": "https://esm.sh/firebase@10.7.1/app",
+                "firebase/firestore": "https://esm.sh/firebase@10.7.1/firestore"
             }
         }
     </script>
@@ -114,8 +116,10 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
         import gsap from 'gsap';
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        
+        // === 修改：引入 getDoc 和 doc ===
+        import { initializeApp } from "firebase/app";
+        import { getFirestore, collection, getDocs, query, where, getDoc, doc } from "firebase/firestore";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
@@ -128,7 +132,7 @@
         };
 
         let app, db;
-        try { app = initializeApp(firebaseConfig); db = getFirestore(app); } catch(e) { console.error(e); }
+        try { app = initializeApp(firebaseConfig); db = getFirestore(app); } catch(e) { console.warn("Firebase init failed (Offline mode?)", e); }
 
         let camera, scene, renderer, controls;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -224,16 +228,15 @@
             
             window.addEventListener('resize', onWindowResize);
 
-            // === 修改 1: 超时延长至 15 秒，触发黑碑彩蛋 ===
             setTimeout(() => {
                 if (!isModelLoaded) {
                     console.warn("Connection timeout. Deploying The Monolith.");
-                    loadTheMonolith(); // 调用彩蛋函数
+                    loadTheMonolith(); // 超时直接彩蛋
                 }
-            }, 15000); // 15秒
+            }, 15000);
 
             if(db) checkPinAndLoad(); 
-            else loadTheMonolith(); // 无数据库也直接黑碑
+            else loadTheMonolith(); 
         }
 
         function startClock() {
@@ -251,86 +254,45 @@
             setInterval(update, 1000);
         }
 
-        // === 2. 2001太空漫游石碑生成器 ===
-        function loadTheMonolith() {
-            if (isModelLoaded) return;
+        // === 核心修改：检查强制 404 模式 ===
+        async function checkPinAndLoad() {
+            try {
+                // 1. 优先检查全局配置 Force 404
+                const configRef = doc(db, "settings", "config");
+                const configSnap = await getDoc(configRef);
+                if (configSnap.exists() && configSnap.data().forceMonolith) {
+                    console.log("FORCE 404 ACTIVE");
+                    loadTheMonolith();
+                    return;
+                }
 
-            // 移除已有
-            if (sculptureWrapper) scene.remove(sculptureWrapper);
-            if (labelMesh) { scene.remove(labelMesh); labelMesh = null; } // === 修改 3: 移除展签 ===
+                // 2. 检查置顶
+                const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
+                const pinSnapshot = await getDocs(pinQuery);
+                if (!pinSnapshot.empty) {
+                    const pinDoc = pinSnapshot.docs[0].data();
+                    loadModelFromUrl(pinDoc.url, pinDoc.name);
+                    return;
+                }
+                
+                // 3. 每日轮播
+                const q = query(collection(db, "model_library"), where("active", "==", true));
+                const querySnapshot = await getDocs(q);
+                let models = [];
+                querySnapshot.forEach((doc) => { models.push({ id: doc.id, ...doc.data() }); });
+                if (models.length === 0) { loadTheMonolith(); return; }
 
-            // 创建纹理
-            const cvs = document.createElement('canvas');
-            cvs.width = 1024; cvs.height = 2048;
-            const ctx = cvs.getContext('2d');
-            
-            // 深色石材背景
-            ctx.fillStyle = '#0a0a0a'; 
-            ctx.fillRect(0, 0, 1024, 2048);
-            
-            // 随机大理石纹路 (低对比度)
-            ctx.strokeStyle = '#1a1a1a'; 
-            ctx.lineWidth = 3;
-            for(let i=0; i<40; i++) {
-                ctx.beginPath();
-                ctx.moveTo(Math.random()*1024, Math.random()*2048);
-                ctx.bezierCurveTo(
-                    Math.random()*1024, Math.random()*2048,
-                    Math.random()*1024, Math.random()*2048,
-                    Math.random()*1024, Math.random()*2048
-                );
-                ctx.stroke();
+                const dailyId = getDailyModelID(models);
+                const selected = models.find(m => m.id === dailyId) || models[0];
+                
+                loadModelFromUrl(selected.url, selected.name);
+            } catch (error) { 
+                console.error("Firebase error", error); 
+                loadTheMonolith(); 
             }
-
-            // 刻字 (低对比度)
-            ctx.textAlign = 'center'; 
-            ctx.textBaseline = 'middle';
-            
-            ctx.font = 'bold 80px "Songti TC", "SimSun", serif'; // 衬线体更有碑文感
-            ctx.fillStyle = '#222222'; 
-            
-            // 竖排文字模拟
-            ctx.fillText("你", 512, 800);
-            ctx.fillText("被", 512, 900);
-            ctx.fillText("牆", 512, 1000);
-            ctx.fillText("了", 512, 1100);
-
-            ctx.font = '40px Helvetica, Arial';
-            ctx.fillText("ERROR 404: VPN NOT FOUND", 512, 1300);
-
-            const texture = new THREE.CanvasTexture(cvs);
-            
-            // 经典比例 1:4:9
-            // 宽 1.5m, 厚 0.375m, 高 6m (为了视觉震撼，稍微调整比例)
-            const geometry = new THREE.BoxGeometry(2.0, 5.0, 0.5); 
-            const material = new THREE.MeshStandardMaterial({ 
-                map: texture,
-                color: 0xffffff,
-                roughness: 0.2, // 光滑
-                metalness: 0.7, // 半金属质感
-                envMapIntensity: 1.0
-            });
-            
-            const monolith = new THREE.Mesh(geometry, material);
-            monolith.castShadow = true; 
-            monolith.receiveShadow = true;
-
-            sculptureWrapper = new THREE.Group();
-            scene.add(sculptureWrapper);
-            
-            // 落地
-            monolith.position.y = 2.5; // 高度的一半
-            sculptureWrapper.add(monolith);
-            
-            sculptureWrapper.position.copy(targetPosition);
-            sculptureWrapper.rotation.y = 0;
-
-            // 碰撞体积
-            colliderRadius = 2.0; 
-            isModelLoaded = true;
-            
-            revealScene();
         }
+
+        // ... (mulberry32, getDailyModelID, loadModelFromUrl, loadDefaultSculpture, generateSystematicName... 保持不变) ...
 
         function mulberry32(a) {
             return function() {
@@ -359,66 +321,6 @@
             }
             const dailyIndex = daysSinceEpoch % sortedModels.length;
             return shuffled[dailyIndex].id;
-        }
-
-        async function checkPinAndLoad() {
-            try {
-                const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
-                const pinSnapshot = await getDocs(pinQuery);
-                if (!pinSnapshot.empty) {
-                    const pinDoc = pinSnapshot.docs[0].data();
-                    loadModelFromUrl(pinDoc.url, pinDoc.name);
-                    return;
-                }
-                const q = query(collection(db, "model_library"), where("active", "==", true));
-                const querySnapshot = await getDocs(q);
-                let models = [];
-                querySnapshot.forEach((doc) => { models.push({ id: doc.id, ...doc.data() }); });
-                if (models.length === 0) { loadTheMonolith(); return; }
-                const dailyId = getDailyModelID(models);
-                const selected = models.find(m => m.id === dailyId) || models[0];
-                loadModelFromUrl(selected.url, selected.name);
-            } catch (error) { 
-                console.error("Firebase error", error); 
-                // 失败直接黑碑
-                loadTheMonolith(); 
-            }
-        }
-
-        function loadModelFromUrl(url, name) {
-            const loader = new GLTFLoader();
-            const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
-            loader.setDRACOLoader(dracoLoader);
-            loader.load(url, (gltf) => {
-                processAndPlaceModel(gltf.scene, name);
-                revealScene();
-            }, undefined, (err) => { 
-                console.error("Load error", err);
-                loadTheMonolith(); 
-            });
-        }
-
-        // ... (Museum Label related functions removed or not used when Monolith is active) ...
-
-        function generateSystematicName(seed) {
-            let hash = 0;
-            if (!seed || seed.length === 0) return "NULL · 000 · Ø";
-            for (let i = 0; i < seed.length; i++) { hash = ((hash << 5) - hash) + seed.charCodeAt(i); hash |= 0; }
-            hash = Math.abs(hash);
-            const rng = (s) => {
-                let t = s + 0x6D2B79F5;
-                t = Math.imul(t ^ (t >>> 15), t | 1);
-                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-            }
-            const rand = rng(hash);
-            let prefix = ""; const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            for (let i = 0; i < 4; i++) { prefix += letters.charAt(Math.floor(rng() * letters.length)); }
-            const num = Math.floor(rng() * 1000).toString().padStart(3, '0'); 
-            const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
-            const sIndex = Math.floor(rng(hash + 77) * symbols.length);
-            return `${prefix} · ${num} · ${symbols[sIndex]}`;
         }
 
         function createMuseumLabel(modelName, sizeInfo) {
@@ -463,6 +365,53 @@
             const mesh = new THREE.Mesh(labelGeo, labelMat);
             mesh.castShadow = true; mesh.receiveShadow = true;
             return mesh;
+        }
+
+        // === 黑碑彩蛋生成器 ===
+        function loadTheMonolith() {
+            if (isModelLoaded) return;
+
+            if (sculptureWrapper) scene.remove(sculptureWrapper);
+            if (labelMesh) { scene.remove(labelMesh); labelMesh = null; } 
+
+            const cvs = document.createElement('canvas');
+            cvs.width = 1024; cvs.height = 2048;
+            const ctx = cvs.getContext('2d');
+            
+            ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, 1024, 2048);
+            ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 3;
+            for(let i=0; i<40; i++) {
+                ctx.beginPath();
+                ctx.moveTo(Math.random()*1024, Math.random()*2048);
+                ctx.bezierCurveTo(Math.random()*1024, Math.random()*2048, Math.random()*1024, Math.random()*2048, Math.random()*1024, Math.random()*2048);
+                ctx.stroke();
+            }
+
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = 'bold 80px "Songti TC", "SimSun", serif'; 
+            ctx.fillStyle = '#222222'; 
+            
+            ctx.fillText("你", 512, 800);
+            ctx.fillText("被", 512, 900);
+            ctx.fillText("牆", 512, 1000);
+            ctx.fillText("了", 512, 1100);
+
+            ctx.font = '40px Helvetica, Arial';
+            ctx.fillText("ERROR 404: VPN NOT FOUND", 512, 1300);
+
+            const texture = new THREE.CanvasTexture(cvs);
+            const geometry = new THREE.BoxGeometry(2.0, 5.0, 0.5); 
+            const material = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.2, metalness: 0.7, envMapIntensity: 1.0 });
+            const monolith = new THREE.Mesh(geometry, material);
+            monolith.castShadow = true; monolith.receiveShadow = true;
+
+            sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
+            monolith.position.y = 2.5; 
+            sculptureWrapper.add(monolith);
+            sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = 0;
+
+            colliderRadius = 2.0; isModelLoaded = true;
+            revealScene();
         }
 
         function getSolidHeight(model, boxHeight) {
@@ -703,7 +652,7 @@
                 if (!touch) return;
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
-                const sensitivity = 0.004; 
+                const sensitivity = 0.01; 
                 targetRotationY -= deltaX * sensitivity;
                 targetRotationX -= deltaY * sensitivity;
                 targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
