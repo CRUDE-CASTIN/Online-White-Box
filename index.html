@@ -259,7 +259,6 @@
             }
         }
 
-        // === 修复：ID 稳定排序 ===
         function getDailyModelID(models) {
             if (!models || models.length === 0) return null;
             const sortedModels = [...models].sort((a, b) => {
@@ -361,22 +360,28 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 保持大字号，纯黑 ===
-            ctx.font = 'bold 80px Helvetica, Arial'; 
+            // === 锁定参数：纯黑，指定大字号 ===
+            
+            // 顶部小字 (64px)
+            ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText("MONOLOGUE / 24 OF TODAY", 100, 140);
+            ctx.fillText("EXHIBITION OF THE DAY", 100, 150);
 
-            ctx.font = 'bold 220px Helvetica, Arial'; 
+            // 标题 (176px)
+            ctx.font = 'bold 176px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText(systematicName, 100, 450);
 
-            ctx.font = 'bold 120px Helvetica, Arial'; 
+            // 正文 (100px)
+            ctx.font = 'bold 100px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
+            
             ctx.fillText(mockYear, 100, 750);
             ctx.fillText(randMat, 100, 950);
             ctx.fillText(sizeInfo, 100, 1150);
             
-            ctx.font = 'bold 80px Helvetica, Arial'; 
+            // 底部 (64px)
+            ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText("Courtesy of the Digital Archive", 100, 1850);
 
@@ -630,7 +635,7 @@
                 if (!touch) return;
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
-                const sensitivity = 0.004; 
+                const sensitivity = 0.01; 
                 targetRotationY -= deltaX * sensitivity;
                 targetRotationX -= deltaY * sensitivity;
                 targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
