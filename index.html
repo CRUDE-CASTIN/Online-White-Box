@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>White Void Gallery</title>
+    <title>MONOLOGUE / 24</title>
     
     <link rel="preconnect" href="https://esm.sh">
     <link rel="preconnect" href="https://www.gstatic.com">
@@ -46,6 +46,16 @@
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
+        /* === 修改 2: LOGO 样式修复 (加深颜色) === */
+        #brand-logo {
+            position: absolute; top: 30px; left: 30px;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-weight: 700; font-size: 12px; 
+            color: #333333; /* 加深颜色，确保可见 */
+            letter-spacing: 2px; z-index: 999; pointer-events: none;
+            opacity: 0; transition: opacity 2.0s ease-in;
+        }
+
         .mobile-text { display: none; }
         .desktop-text { display: inline; }
 
@@ -77,6 +87,7 @@
             }
             .desktop-text { display: none; }
             .mobile-text { display: inline; }
+            #brand-logo { top: 20px; left: 20px; font-size: 10px; } 
         }
     </style>
     
@@ -94,6 +105,8 @@
     <div id="intro-overlay"><div id="loading-msg">ENTERING...</div></div>
     <div id="click-capture"></div>
     
+    <div id="brand-logo">MONOLOGUE / 24</div>
+
     <div id="realtime-clock">0000-00-00 00:00:00</div>
     
     <div id="instruction">
@@ -146,6 +159,7 @@
         const introOverlayDiv = document.getElementById('intro-overlay');
         const instructionText = document.getElementById('instruction');
         const clockDiv = document.getElementById('realtime-clock');
+        const brandLogo = document.getElementById('brand-logo');
 
         let joystickVector = { x: 0, y: 0 }; 
         let joystickTouchId = null; 
@@ -160,6 +174,7 @@
         let pinchStartDist = 0; 
         let pinchStartFOV = DEFAULT_FOV;
         let isZooming = false; 
+        let isZoomCooldown = false;
 
         init();
         animate();
@@ -217,6 +232,13 @@
             
             window.addEventListener('resize', onWindowResize);
 
+            setTimeout(() => {
+                if (!isModelLoaded) {
+                    console.warn("Loading timeout. Forcing default.");
+                    loadDefaultSculpture();
+                }
+            }, 8000);
+
             if(db) checkPinAndLoad(); 
             else loadDefaultSculpture();
         }
@@ -271,6 +293,7 @@
         }
 
         function loadDefaultSculpture() {
+            if (isModelLoaded) return; 
             const group = new THREE.Group();
             const material = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2, metalness: 0.8 });
             const geo = new THREE.TorusKnotGeometry(0.8, 0.25, 128, 64);
@@ -316,32 +339,30 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 修改：内容更新为 MONOLOGUE / 24 OF TODAY，字号/颜色/排版严格保持 ===
-            
-            // 顶部小字
+            // === 修改 1: 改回 EXHIBITION OF THE DAY，保持大字号(64px)，保持纯黑 ===
             ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText("MONOLOGUE / 24 OF TODAY", 100, 120);
+            ctx.fillText("EXHIBITION OF THE DAY", 100, 140);
 
             // 标题 (176px)
             ctx.font = 'bold 176px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(systematicName, 100, 350);
+            ctx.fillText(systematicName, 100, 450);
 
             // 正文 (100px)
             ctx.font = 'bold 100px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
-            ctx.fillText(mockYear, 100, 550);
-            ctx.fillText(randMat, 100, 700);
-            ctx.fillText(sizeInfo, 100, 850);
+            ctx.fillText(mockYear, 100, 750);
+            ctx.fillText(randMat, 100, 950);
+            ctx.fillText(sizeInfo, 100, 1150);
             
             // 底部 (64px)
             ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText("Courtesy of the Digital Archive", 100, 1850);
 
-            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 30; ctx.strokeRect(0, 0, 2048, 2048);
+            ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 40; ctx.strokeRect(0, 0, 2048, 2048);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -427,6 +448,7 @@
                         clickCaptureDiv.style.display = 'block'; 
                         instructionText.style.opacity = '1';
                         clockDiv.style.opacity = '1'; 
+                        brandLogo.style.opacity = '1'; // Logo 显示
                         resetMovementState();
                         isIntroFinished = true; 
                     }
@@ -629,7 +651,6 @@
                 if (moveForward || moveBackward) velocity.z -= direction.z * 80.0 * delta; if (moveLeft || moveRight) velocity.x -= direction.x * 80.0 * delta; 
                 
                 if (!isZooming && (joystickVector.x !== 0 || joystickVector.y !== 0)) { velocity.z -= -joystickVector.y * 80.0 * delta; velocity.x -= joystickVector.x * 80.0 * delta; }
-                
                 if (controls.isLocked) { 
                     controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta); 
                     targetRotationY = camera.rotation.y;
