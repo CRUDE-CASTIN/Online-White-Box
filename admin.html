@@ -168,12 +168,13 @@
             const cutoffTimestamp = startOfDay.getTime() / 1000;
 
             // 2. 过滤：只保留今天之前(含今天0点前)上传的模型
-            let candidates = models.filter(m => m.uploadDate.seconds < cutoffTimestamp);
+            // 注意：Firebase Timestamp 单位是秒
+            let candidates = models.filter(m => m.uploadDate && m.uploadDate.seconds < cutoffTimestamp);
             
             // 兜底：如果还没模型满足条件（比如全是刚传的），就用全部模型，避免空窗
             if (candidates.length === 0) candidates = models;
 
-            // 3. 排序 (时间+ID)
+            // 3. 排序 (时间+ID) 确保顺序绝对一致
             const sortedModels = [...candidates].sort((a, b) => {
                 const timeDiff = a.uploadDate.seconds - b.uploadDate.seconds;
                 if (timeDiff !== 0) return timeDiff;
@@ -181,6 +182,7 @@
             });
 
             // 4. 每日轮播计算
+            // 使用 candidates.length 而不是 models.length
             const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
             const cycle = Math.floor(daysSinceEpoch / sortedModels.length);
             const rng = mulberry32(cycle);
@@ -206,7 +208,7 @@
                     if(data.size) totalBytes += data.size;
                 });
                 
-                // 计算每日 ID
+                // 计算每日 ID (仅在 active 模型中筛选)
                 const dailyId = getDailyModelID(currentModels.filter(m => m.active));
                 
                 currentModels.forEach(data => {

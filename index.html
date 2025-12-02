@@ -259,14 +259,30 @@
             }
         }
 
+        // === 核心修复：同步后台逻辑，过滤今日之后上传的模型 ===
         function getDailyModelID(models) {
             if (!models || models.length === 0) return null;
-            const sortedModels = [...models].sort((a, b) => {
+
+            const now = new Date();
+            // 1. 获取今日 00:00 UTC 的时间戳 (秒)
+            const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+            const cutoffTimestamp = startOfDay.getTime() / 1000;
+
+            // 2. 过滤：只保留今天之前(含今天0点前)上传的模型
+            let candidates = models.filter(m => m.uploadDate && m.uploadDate.seconds < cutoffTimestamp);
+            
+            // 兜底
+            if (candidates.length === 0) candidates = models;
+
+            // 3. 排序 (时间+ID)
+            const sortedModels = [...candidates].sort((a, b) => {
                 const timeDiff = a.uploadDate.seconds - b.uploadDate.seconds;
                 if (timeDiff !== 0) return timeDiff;
                 return a.id.localeCompare(b.id);
             });
-            const now = new Date();
+
+            // 4. 每日轮播计算
+            // 关键：基于 candidates.length 计算 cycle
             const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
             const cycle = Math.floor(daysSinceEpoch / sortedModels.length);
             const rng = mulberry32(cycle);
@@ -375,22 +391,26 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 参数锁定 ===
+            // === 严格遵守展签参数规定 ===
+            // 顶部文字: 64px
             ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText("EXHIBITION OF THE DAY", 100, 140);
 
+            // 主标题: 176px
             ctx.font = 'bold 176px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(artInfo.title, 100, 450); // 使用生成标题
+            ctx.fillText(artInfo.title, 100, 450); 
 
+            // 正文内容: 100px
             ctx.font = 'bold 100px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             
-            ctx.fillText(artInfo.year, 100, 750); // 使用生成年份
-            ctx.fillText(artInfo.material, 100, 950); // 使用生成材料
-            ctx.fillText(sizeInfo, 100, 1150); // 物理尺寸
+            ctx.fillText(artInfo.year, 100, 750); 
+            ctx.fillText(artInfo.material, 100, 950); 
+            ctx.fillText(sizeInfo, 100, 1150); 
             
+            // 底部文字: 64px
             ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText("Courtesy of the Digital Archive", 100, 1850);
