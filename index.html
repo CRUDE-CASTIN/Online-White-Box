@@ -259,30 +259,19 @@
             }
         }
 
-        // === 核心修复：同步后台逻辑，过滤今日之后上传的模型 ===
+        // === 保持同步的抽签逻辑 ===
         function getDailyModelID(models) {
             if (!models || models.length === 0) return null;
-
             const now = new Date();
-            // 1. 获取今日 00:00 UTC 的时间戳 (秒)
             const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
             const cutoffTimestamp = startOfDay.getTime() / 1000;
-
-            // 2. 过滤：只保留今天之前(含今天0点前)上传的模型
             let candidates = models.filter(m => m.uploadDate && m.uploadDate.seconds < cutoffTimestamp);
-            
-            // 兜底
             if (candidates.length === 0) candidates = models;
-
-            // 3. 排序 (时间+ID)
             const sortedModels = [...candidates].sort((a, b) => {
                 const timeDiff = a.uploadDate.seconds - b.uploadDate.seconds;
                 if (timeDiff !== 0) return timeDiff;
                 return a.id.localeCompare(b.id);
             });
-
-            // 4. 每日轮播计算
-            // 关键：基于 candidates.length 计算 cycle
             const daysSinceEpoch = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
             const cycle = Math.floor(daysSinceEpoch / sortedModels.length);
             const rng = mulberry32(cycle);
@@ -304,7 +293,6 @@
                     loadModelFromUrl(pinDoc.url, pinDoc.name);
                     return;
                 }
-                
                 const q = query(collection(db, "model_library"), where("active", "==", true));
                 const querySnapshot = await getDocs(q);
                 let models = [];
@@ -335,17 +323,6 @@
             });
         }
 
-        function loadDefaultSculpture() {
-            if (isModelLoaded) return; 
-            const group = new THREE.Group();
-            const material = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2, metalness: 0.8 });
-            const geo = new THREE.TorusKnotGeometry(0.8, 0.25, 128, 64);
-            const mesh = new THREE.Mesh(geo, material); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
-            processAndPlaceModel(group, "Default Sculpture");
-            revealScene();
-        }
-
-        // === 核心算法：与后台 getArtData 保持一致 ===
         function getArtData(seed) {
             let hash = 0;
             if (!seed || seed.length === 0) return { title: "NULL · 000 · Ø", year: 2024, material: "Unknown" };
@@ -353,7 +330,6 @@
             hash = Math.abs(hash);
             const rng = mulberry32(hash);
             
-            // Title
             const rand = rng();
             let prefix = ""; const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
             for (let i = 0; i < 4; i++) { prefix += letters.charAt(Math.floor(rng() * letters.length)); }
@@ -361,65 +337,90 @@
             const symbols = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "Σ", "Ω", "Ø", "Δ"];
             const sIndex = Math.floor(rng() * symbols.length);
             const title = `${prefix} · ${num} · ${symbols[sIndex]}`;
-
-            // Year
             const year = Math.floor(rng() * (2025 - 1980 + 1)) + 1980;
-
-            // Material (复杂算法)
             const rawMats = ["Bronze", "Marble", "Steel", "Resin", "Concrete", "Glass", "Silicon", "Carbon Fiber", "Gold Leaf"];
             const wildMats = ["Liquid Light", "Solidified Smoke", "Aerogel", "Metallic Hydrogen", "Quantum Foam", "Corrupted Data", "Lunar Dust", "Haptic Feedback", "Neural Network Weights"];
             const concepts = ["Time", "Silence", "Gravity", "Memory", "Void", "Echoes", "Entropy"];
             let material = ""; const matType = rng();
-            
             if (matType < 0.3) { material = wildMats[Math.floor(rng() * wildMats.length)]; } 
             else if (matType < 0.6) { material = `${rawMats[Math.floor(rng() * rawMats.length)]} & ${wildMats[Math.floor(rng() * wildMats.length)]}`; } 
             else if (matType < 0.8) { material = `Compressed ${concepts[Math.floor(rng() * concepts.length)]}`; } 
             else { material = `Polished ${rawMats[Math.floor(rng() * rawMats.length)]} encased in Vacuum`; }
-
             return { title, year, material };
         }
 
+        // === 核心修改：支持自动换行的展签生成 ===
         function createMuseumLabel(modelName, sizeInfo) {
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; }
             
-            // 使用同步的生成函数
             const artInfo = getArtData(modelName);
-
             const canvas = document.createElement('canvas');
             canvas.width = 2048; canvas.height = 2048; 
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 严格遵守展签参数规定 ===
-            // 顶部文字: 64px
+            // --- 自动换行工具函数 ---
+            function wrapText(context, text, x, y, maxWidth, lineHeight) {
+                const words = String(text).split(' ');
+                let line = '';
+                let currentY = y;
+                for(let n = 0; n < words.length; n++) {
+                    const testLine = line + words[n] + ' ';
+                    const metrics = context.measureText(testLine);
+                    const testWidth = metrics.width;
+                    if (testWidth > maxWidth && n > 0) {
+                        context.fillText(line, x, currentY);
+                        line = words[n] + ' ';
+                        currentY += lineHeight;
+                    } else {
+                        line = testLine;
+                    }
+                }
+                context.fillText(line, x, currentY);
+                return currentY + lineHeight; // 返回下一行起始位置
+            }
+
+            const maxWidth = 1840; // 留出左右边距
+
+            // 1. 顶部固定
             ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText("EXHIBITION OF THE DAY", 100, 140);
 
-            // 主标题: 176px
+            // 2. 标题 (流式布局) - Font: 176px
+            let cursorY = 450;
             ctx.font = 'bold 176px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
-            ctx.fillText(artInfo.title, 100, 450); 
-
-            // 正文内容: 100px
+            const titleLineHeight = 220; 
+            // 绘制标题并更新 cursorY，如果标题换行，cursorY 会自动增加
+            cursorY = wrapText(ctx, artInfo.title, 100, cursorY, maxWidth, titleLineHeight);
+            
+            // 3. 正文 (流式布局) - Font: 100px
+            cursorY += 80; // 标题与正文的间距
             ctx.font = 'bold 100px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; 
+            const bodyLineHeight = 130;
+
+            // 年份
+            cursorY = wrapText(ctx, artInfo.year, 100, cursorY, maxWidth, bodyLineHeight);
+            cursorY += 70; // 段落间距
+
+            // 材质
+            cursorY = wrapText(ctx, artInfo.material, 100, cursorY, maxWidth, bodyLineHeight);
+            cursorY += 70; // 段落间距
+
+            // 尺寸
+            cursorY = wrapText(ctx, sizeInfo, 100, cursorY, maxWidth, bodyLineHeight);
             
-            ctx.fillText(artInfo.year, 100, 750); 
-            ctx.fillText(artInfo.material, 100, 950); 
-            ctx.fillText(sizeInfo, 100, 1150); 
-            
-            // 底部文字: 64px
+            // 4. 底部固定
             ctx.font = 'bold 64px Helvetica, Arial'; 
-            ctx.fillStyle = '#000000'; 
             ctx.fillText("Courtesy of the Digital Archive", 100, 1850);
 
+            // 边框
             ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 40; ctx.strokeRect(0, 0, 2048, 2048);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-            
             const labelGeo = new THREE.BoxGeometry(0.4, 0.02, 0.4); 
             const labelMat = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 1.0, metalness: 0.0 });
             const mesh = new THREE.Mesh(labelGeo, labelMat);
@@ -427,17 +428,13 @@
             return mesh;
         }
 
-        // === 黑碑彩蛋 ===
         function loadTheMonolith() {
             if (isModelLoaded) return;
-
             if (sculptureWrapper) scene.remove(sculptureWrapper);
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; } 
-
             const cvs = document.createElement('canvas');
             cvs.width = 1024; cvs.height = 2048;
             const ctx = cvs.getContext('2d');
-            
             ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, 1024, 2048);
             ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 3;
             for(let i=0; i<40; i++) {
@@ -446,24 +443,20 @@
                 ctx.bezierCurveTo(Math.random()*1024, Math.random()*2048, Math.random()*1024, Math.random()*2048, Math.random()*1024, Math.random()*2048);
                 ctx.stroke();
             }
-
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.font = 'bold 80px "Songti TC", "SimSun", serif'; 
             ctx.fillStyle = '#222222'; 
             ctx.fillText("你", 512, 800); ctx.fillText("被", 512, 900); ctx.fillText("牆", 512, 1000); ctx.fillText("了", 512, 1100);
             ctx.font = '40px Helvetica, Arial'; ctx.fillText("ERROR 404: VPN NOT FOUND", 512, 1300);
-
             const texture = new THREE.CanvasTexture(cvs);
             const geometry = new THREE.BoxGeometry(2.0, 5.0, 0.5); 
             const material = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.2, metalness: 0.7, envMapIntensity: 1.0 });
             const monolith = new THREE.Mesh(geometry, material);
             monolith.castShadow = true; monolith.receiveShadow = true;
-
             sculptureWrapper = new THREE.Group(); scene.add(sculptureWrapper);
             monolith.position.y = 2.5; 
             sculptureWrapper.add(monolith);
             sculptureWrapper.position.copy(targetPosition); sculptureWrapper.rotation.y = 0;
-
             colliderRadius = 2.0; isModelLoaded = true;
             revealScene();
         }
