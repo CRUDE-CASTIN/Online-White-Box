@@ -10,14 +10,7 @@
     <link rel="preconnect" href="https://firebasestorage.googleapis.com">
 
     <style>
-        body { 
-            margin: 0; overflow: hidden; 
-            background-color: #ffffff; 
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; 
-            touch-action: none; 
-            -webkit-user-select: none; user-select: none; 
-            transition: background-color 1.0s ease; 
-        }
+        body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
         
         #intro-overlay { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
@@ -36,7 +29,6 @@
 
         #click-capture { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 998; display: none; cursor: pointer; background: rgba(0,0,0,0); }
         
-        /* 底部时钟 */
         #realtime-clock {
             position: absolute; bottom: 50px; width: 100%; text-align: center;
             color: #333; font-size: 12px; font-weight: 400;
@@ -46,7 +38,6 @@
             letter-spacing: 6px; transform: scaleX(1.1); font-variant-numeric: tabular-nums; 
         }
 
-        /* 底部操作提示 */
         #instruction { 
             position: absolute; bottom: 20px; width: 100%; text-align: center; 
             color: #ccc; 
@@ -55,7 +46,6 @@
             opacity: 0; transition: opacity 1.0s; letter-spacing: 1px; text-transform: uppercase;
         }
 
-        /* 左上角 Logo */
         #brand-logo {
             position: absolute; top: 30px; left: 30px;
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -68,7 +58,6 @@
         .mobile-text { display: none; }
         .desktop-text { display: inline; }
 
-        /* 移动端摇杆 */
         #joystick-zone {
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
             width: 160px; height: 160px; 
@@ -127,9 +116,8 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
         import gsap from 'gsap';
-        
         import { initializeApp } from "firebase/app";
-        import { getFirestore, collection, getDocs, query, where, getDoc, doc, onSnapshot } from "firebase/firestore";
+        import { getFirestore, collection, getDocs, query, where } from "firebase/firestore";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAl_IaEOIKzrnulRN6j0pn0uN_aJFdAPOc",
@@ -142,7 +130,7 @@
         };
 
         let app, db;
-        try { app = initializeApp(firebaseConfig); db = getFirestore(app); } catch(e) { console.warn("Firebase init failed (Offline mode?)", e); }
+        try { app = initializeApp(firebaseConfig); db = getFirestore(app); } catch(e) { console.warn("Firebase init failed", e); }
 
         let camera, scene, renderer, controls;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -160,7 +148,6 @@
         let isModelLoaded = false;
         let isIntroFinished = false; 
         let isResetting = false; 
-        let isForce404 = false;
         
         const clickCaptureDiv = document.getElementById('click-capture');
         const introOverlayDiv = document.getElementById('intro-overlay');
@@ -239,7 +226,7 @@
             
             window.addEventListener('resize', onWindowResize);
 
-            // 15秒超时，强制黑碑
+            // === 超时保险：15秒强制黑碑 ===
             setTimeout(() => {
                 if (!isModelLoaded) {
                     console.warn("Connection timeout. Deploying The Monolith.");
@@ -247,17 +234,8 @@
                 }
             }, 15000);
 
-            if(db) {
-                 // 尝试初始化实时监听，如果不成功（如网络），则在 catch 中处理
-                 try {
-                    initRealtimeListener();
-                 } catch (e) {
-                     console.error("Realtime init failed", e);
-                     loadTheMonolith();
-                 }
-            } else {
-                loadTheMonolith(); 
-            }
+            if(db) checkPinAndLoad(); 
+            else loadTheMonolith(); 
         }
 
         function startClock() {
@@ -304,78 +282,9 @@
             return shuffled[dailyIndex].id;
         }
 
-        // 实时监听
-        function initRealtimeListener() {
-            // 监听 404 开关
-            // 注意：这里没有直接监听 settings/config，因为我们不想在 admin 改配置时前台立即黑屏（这可能会吓到用户）
-            // 我们只在 checkPinAndLoad 时检查一次。
-            // 等等，你之前要求“保留强制404按钮功能”，且“一开即现”。
-            // 所以这里确实需要监听。
-            
-            // 但为了避免复杂性，我们把逻辑简化：
-            // checkPinAndLoad 会负责一切加载。我们只在 start 时调用它。
-            // 实时监听数据库可能会导致性能问题或闪烁。
-            // 既然你希望“关掉开关后恢复正常”，那确实需要监听。
-            
-            // 但为了最简单的修复，我们只在加载时检查一次。
-            // 如果需要实时切换，逻辑会很复杂（需要清理场景等）。
-            // 让我们先保证“加载时不白屏”。
-            
-            checkPinAndLoad();
-        }
-
         async function checkPinAndLoad() {
             try {
-                // 1. 404 检查
-                // 由于我们不再实时监听，这里只是一次性检查
-                // 如果需要实时，可以使用 onSnapshot，但这里为了稳妥，我们先做单次
-                // 稍等，既然你要“恢复正常”，那还是用 snapshot 比较好。
-                // 让我们用 snapshot 监听整个 model_library，因为它是低频更新的。
-                
-                // 这里我们回退到最稳妥的方案：只在进入时检查一次。
-                // 这样可以避免逻辑打架。
-                
-                // 检查 404 配置 (单次)
-                // 注意：如果 db 初始化失败，这里会报错进入 catch，从而显示黑碑，这是符合预期的。
-                
-                // 这是一个妥协：为了保证国内加载速度，我们不引入太多实时监听。
-                // 只有在 init 时加载。如果后台改了，用户下次刷新才会变。
-                
-                // 如果你坚持要实时变，请告诉我，我再加回来。现在为了稳妥先做单次。
-                
-                // 修正：还是加上实时监听吧，否则 admin 按钮没反馈。
-                
-                // 监听 settings/config
-                onSnapshot(doc(db, "settings", "config"), (docSnap) => {
-                     if (docSnap.exists() && docSnap.data().forceMonolith) {
-                         console.log("Force 404 ON");
-                         isForce404 = true;
-                         loadTheMonolith();
-                     } else {
-                         console.log("Force 404 OFF");
-                         if (isForce404) {
-                             isForce404 = false;
-                             isModelLoaded = false; 
-                             // 重新触发加载流程
-                             loadContent();
-                         }
-                     }
-                });
-                
-                // 如果没有 force404，这里会继续执行后续逻辑吗？onSnapshot 是异步的。
-                // 所以我们需要把“正常加载”也放在一个函数里。
-                loadContent();
-
-            } catch (error) { 
-                console.error("Firebase error", error); 
-                loadTheMonolith(); 
-            }
-        }
-        
-        async function loadContent() {
-             if (isForce404) return;
-             
-             try {
+                // 1. 检查置顶
                 const pinQuery = query(collection(db, "model_library"), where("pinned", "==", true));
                 const pinSnapshot = await getDocs(pinQuery);
                 if (!pinSnapshot.empty) {
@@ -384,6 +293,7 @@
                     return;
                 }
                 
+                // 2. 每日轮播
                 const q = query(collection(db, "model_library"), where("active", "==", true));
                 const querySnapshot = await getDocs(q);
                 let models = [];
@@ -394,20 +304,18 @@
                 const selected = models.find(m => m.id === dailyId) || models[0];
                 
                 loadModelFromUrl(selected.url, selected.name);
-             } catch (e) {
-                 console.error(e);
-                 loadTheMonolith();
-             }
+            } catch (error) { 
+                console.error("Firebase error", error); 
+                loadTheMonolith(); 
+            }
         }
 
         function loadModelFromUrl(url, name) {
             const loader = new GLTFLoader();
             const dracoLoader = new DRACOLoader();
-            // 使用 jsdelivr 确保国内可访问
             dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
             loader.setDRACOLoader(dracoLoader);
             loader.load(url, (gltf) => {
-                if (isForce404) return; // 防抖
                 processAndPlaceModel(gltf.scene, name);
                 revealScene();
             }, undefined, (err) => { 
@@ -449,7 +357,7 @@
             ctx.fillStyle = '#f9f9f9'; ctx.fillRect(0, 0, 2048, 2048);
             ctx.textAlign = 'left';
             
-            // === 展签参数锁定 (Big & Black) ===
+            // === 展签参数锁定：大字号，纯黑 ===
             ctx.font = 'bold 64px Helvetica, Arial'; 
             ctx.fillStyle = '#000000'; 
             ctx.fillText("MONOLOGUE / 24 OF TODAY", 100, 140);
@@ -481,10 +389,13 @@
             return mesh;
         }
 
+        // === 黑碑彩蛋 (白背景 + 黑石) ===
         function loadTheMonolith() {
-            // 1. 确保背景白 (你要求的)
+            if (isModelLoaded) return;
+
+            // 确保背景白
             scene.background = new THREE.Color(0xffffff);
-            
+
             if (sculptureWrapper) scene.remove(sculptureWrapper);
             if (labelMesh) { scene.remove(labelMesh); labelMesh = null; } 
 
@@ -493,12 +404,10 @@
             const ctx = cvs.getContext('2d');
             
             // 黑底
-            ctx.fillStyle = '#0a0a0a'; 
-            ctx.fillRect(0, 0, 1024, 2048);
+            ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, 1024, 2048);
             
             // 灰纹
-            ctx.strokeStyle = '#1a1a1a'; 
-            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 3;
             for(let i=0; i<40; i++) {
                 ctx.beginPath();
                 ctx.moveTo(Math.random()*1024, Math.random()*2048);
@@ -511,17 +420,13 @@
             ctx.font = 'bold 80px "Songti TC", "SimSun", serif'; 
             ctx.fillStyle = '#333333'; 
             
-            ctx.fillText("你", 512, 800);
-            ctx.fillText("被", 512, 900);
-            ctx.fillText("牆", 512, 1000);
-            ctx.fillText("了", 512, 1100);
-
-            ctx.font = '40px Helvetica, Arial';
-            ctx.fillText("ERROR 404: VPN NOT FOUND", 512, 1300);
+            ctx.fillText("你", 512, 800); ctx.fillText("被", 512, 900); ctx.fillText("牆", 512, 1000); ctx.fillText("了", 512, 1100);
+            ctx.font = '40px Helvetica, Arial'; ctx.fillText("ERROR 404: VPN NOT FOUND", 512, 1300);
 
             const texture = new THREE.CanvasTexture(cvs);
             const geometry = new THREE.BoxGeometry(2.0, 5.0, 0.5); 
-            const material = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.2, metalness: 0.7, envMapIntensity: 1.0 });
+            // 黑色大理石材质
+            const material = new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.1, metalness: 0.6, envMapIntensity: 1.0 });
             const monolith = new THREE.Mesh(geometry, material);
             monolith.castShadow = true; monolith.receiveShadow = true;
 
@@ -559,7 +464,8 @@
         }
 
         function processAndPlaceModel(rawModel, rawName) {
-            scene.background = new THREE.Color(0xffffff); // 强制白背景
+            // 确保白背景
+            scene.background = new THREE.Color(0xffffff);
 
             if (sculptureWrapper) scene.remove(sculptureWrapper);
             if (labelMesh) scene.remove(labelMesh);
@@ -774,7 +680,7 @@
                 if (!touch) return;
                 const deltaX = touch.clientX - lastLookX; const deltaY = touch.clientY - lastLookY;
                 lastLookX = touch.clientX; lastLookY = touch.clientY;
-                const sensitivity = 0.01; 
+                const sensitivity = 0.004; 
                 targetRotationY -= deltaX * sensitivity;
                 targetRotationX -= deltaY * sensitivity;
                 targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
